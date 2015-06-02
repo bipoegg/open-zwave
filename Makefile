@@ -19,14 +19,17 @@ export PREFIX
 all: 
 	$(MAKE) -C $(top_srcdir)/cpp/build/ -$(MAKEFLAGS) 
 	$(MAKE) -C $(top_srcdir)/cpp/examples/MinOZW/ -$(MAKEFLAGS) 
+	$(MAKE) -C $(top_srcdir)/cpp/examples/linux/Server/ -$(MAKEFLAGS)
 
 install:
 	$(MAKE) -C $(top_srcdir)/cpp/build/ -$(MAKEFLAGS) $(MAKECMDGOALS)
 	$(MAKE) -C $(top_srcdir)/cpp/examples/MinOZW/ -$(MAKEFLAGS) $(MAKECMDGOALS)
+	$(MAKE) -C $(top_srcdir)/cpp/examples/linux/Server/ -$(MAKEFLAGS) $(MAKECMDGOALS)
 
 clean:
 	$(MAKE) -C $(top_srcdir)/cpp/build/ -$(MAKEFLAGS) $(MAKECMDGOALS)
 	$(MAKE) -C $(top_srcdir)/cpp/examples/MinOZW/ -$(MAKEFLAGS) $(MAKECMDGOALS)
+	$(MAKE) -C $(top_srcdir)/cpp/examples/linux/Server -$(MAKEFLAGS) $(MAKECMDGOALS)
 
 cpp/src/vers.cpp:
 	$(MAKE) -C $(top_srcdir)/cpp/build/ -$(MAKEFLAGS) cpp/src/vers.cpp
