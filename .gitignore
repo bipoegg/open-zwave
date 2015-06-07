@@ -6,3 +6,4 @@ libopenzwave.a
 libopenzwave.pc
 libopenzwave.so*
 libopenzwave.so
+*.swp
