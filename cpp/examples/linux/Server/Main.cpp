@@ -139,7 +139,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 
 	if (rspSocketInt != 0) {
 
-		rspSocket << "OnNotificationyy Notification type = 0x" << std::to_string(_notification->GetType()) << "\n";
+		rspSocket << "OnNotification Notification type = 0x" << std::to_string(_notification->GetType()) << "\n";
 
 	}
 
@@ -150,7 +150,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 				// Add the new value to our list
 				nodeInfo->m_values.push_back( _notification->GetValueID());
 				if (rspSocketInt != 0) 
-					rspSocket << "OnNotificationyy Notification ValueAdded \n";
+					rspSocket << "OnNotification Notification ValueAdded \n";
 			}
 			
 			break;
@@ -164,7 +164,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 					if((*it) == _notification->GetValueID()) {
 						nodeInfo->m_values.erase(it);
 						if (rspSocketInt != 0) 
-							rspSocket << "OnNotificationyy Notification ValueRemoved \n";
+							rspSocket << "OnNotification Notification ValueRemoved \n";
 						break;
 					}
 				}
@@ -179,13 +179,13 @@ void OnNotification(Notification const* _notification, void* _context) {
 			if(NodeInfo* nodeInfo = GetNodeInfo(_notification)) {
 				for (list<ValueID>::iterator it = nodeInfo->m_values.begin(); it != nodeInfo->m_values.end(); ++it) {
                     			if ((*it) == _notification->GetValueID()) {
-                        			nodeInfo->m_values.erase(it);
 						if (rspSocketInt != 0) { 
 							string tempstr="";
 							Manager::Get()->GetValueAsString(*it,&tempstr);
-							rspSocket << "OnNotificationyy Notification ValueChanged node " << std::to_string(nodeInfo->m_nodeId) 
-								<< " val " << Manager::Get()->GetValueLabel(*it) << " " << tempstr << "\n";
+							rspSocket << "OnNotification Notification ValueChanged node " << std::to_string(nodeInfo->m_nodeId) 
+								<< " val <" << Manager::Get()->GetValueLabel(*it) << "> " << tempstr << "\n";
 						}
+                        			nodeInfo->m_values.erase(it);
                         			break;
                     			}
                 		}
@@ -202,7 +202,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			{
 				nodeInfo = nodeInfo;            // placeholder for real action
 				if (rspSocketInt != 0) 
-					rspSocket << "OnNotificationyy Notification Group \n";
+					rspSocket << "OnNotification Notification Group \n";
 			}
 			break;
 		}
@@ -216,7 +216,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			nodeInfo->m_polled = false;
 			g_nodes.push_back(nodeInfo);
 			if (rspSocketInt != 0) {
-				rspSocket << "OnNotificationyy Notification NodeAdded homeId=" << std::to_string(nodeInfo->m_homeId) 
+				rspSocket << "OnNotification Notification NodeAdded homeId=" << std::to_string(nodeInfo->m_homeId) 
 					<< " nodeId=" << std::to_string(nodeInfo->m_nodeId) <<  "\n";
 			}
 			break;
@@ -233,7 +233,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 					g_nodes.erase(it);
 					delete nodeInfo;
 					if (rspSocketInt != 0) 
-						rspSocket << "OnNotificationyy Notification NodeRemoved homeId=" << std::to_string(homeId) 
+						rspSocket << "OnNotification Notification NodeRemoved homeId=" << std::to_string(homeId) 
 							<< " nodeId=" << std::to_string(nodeId) <<  "\n";
 					break;
 				}
@@ -248,7 +248,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			if(NodeInfo* nodeInfo = GetNodeInfo(_notification)) {
 				nodeInfo = nodeInfo;            // placeholder for real action
 				if (rspSocketInt != 0) 
-					rspSocket << "OnNotificationyy Notification NodeEvent homeId=" << std::to_string(nodeInfo->m_homeId)
+					rspSocket << "OnNotification Notification NodeEvent homeId=" << std::to_string(nodeInfo->m_homeId)
 					       	<< " nodeId=" << std::to_string(nodeInfo->m_nodeId) <<  "\n";
 			}
 			break;
@@ -259,7 +259,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			if(NodeInfo* nodeInfo = GetNodeInfo(_notification)) {
 				nodeInfo->m_polled = false;
 				if (rspSocketInt != 0) 
-					rspSocket << "OnNotificationyy Notification PollingDisabled homeId=" << std::to_string(nodeInfo->m_homeId) 
+					rspSocket << "OnNotification Notification PollingDisabled homeId=" << std::to_string(nodeInfo->m_homeId) 
 						<< " nodeId=" << std::to_string(nodeInfo->m_nodeId) <<  "\n";
 			}
 			break;
@@ -270,7 +270,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			if(NodeInfo* nodeInfo = GetNodeInfo(_notification)) {
 				nodeInfo->m_polled = true;
 				if (rspSocketInt != 0) 
-					rspSocket << "OnNotificationyy Notification PollingEnabled homeId=" << std::to_string(nodeInfo->m_homeId) 
+					rspSocket << "OnNotification Notification PollingEnabled homeId=" << std::to_string(nodeInfo->m_homeId) 
 						<< " nodeId=" << std::to_string(nodeInfo->m_nodeId) <<  "\n";
 			}
 			break;
@@ -280,7 +280,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 		{
 			g_homeId = _notification->GetHomeId();
 			if (rspSocketInt != 0) 
-				rspSocket << "OnNotificationyy Notification DriverReady homeId=" << std::to_string(g_homeId) <<  "\n";
+				rspSocket << "OnNotification Notification DriverReady homeId=" << std::to_string(g_homeId) <<  "\n";
 			break;
 		}
 
@@ -289,7 +289,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 			g_initFailed = true;
 			pthread_cond_broadcast(&initCond);
 			if (rspSocketInt != 0) 
-				rspSocket << "OnNotificationyy Notification DriverFailed\n";
+				rspSocket << "OnNotification Notification DriverFailed\n";
 			break;
 		}
 
@@ -299,7 +299,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 		{
 			pthread_cond_broadcast(&initCond);
 			if (rspSocketInt != 0) 
-				rspSocket << "OnNotificationyy Notification Queried\n";
+				rspSocket << "OnNotification Notification Queried\n";
 			break;
 		}
 
@@ -310,7 +310,7 @@ void OnNotification(Notification const* _notification, void* _context) {
 		case Notification::Type_NodeQueriesComplete:
 		{
 			if (rspSocketInt != 0) 
-				rspSocket << "OnNotificationyy Notification no process\n";
+				rspSocket << "OnNotification Notification no process\n";
 			break;
 		}
 		default:
@@ -598,7 +598,7 @@ void *process_commands(void* arg)
 					device = device.substr(0, device.size() - 1) + "\n";
 					printf("device = %s\n",device.c_str());					
 					printf("Sent Device List \n");
-					thread_sock << device;
+					thread_sock << "CMD&ALIST result: "  << device;
 					break;
 				}
 				
@@ -620,14 +620,14 @@ void *process_commands(void* arg)
 					Option=v[3].c_str();
 					
 					if(!SetValue(g_homeId, Node, Level, err_message)){
-						thread_sock << err_message;
+						thread_sock << "CMD&DEVICE result: error " << err_message;
 					}
 					else{
 						stringstream ssNode, ssLevel;
 						ssNode << Node;
 						ssLevel << Level;
 						string result = "MSG~ZWave Node=" + ssNode.str() + " Level=" + ssLevel.str() + "\n";
-						thread_sock << result;
+						thread_sock <<"CMD&DEVICE result: " << result;
 					}
 					break;
 				}
@@ -656,7 +656,7 @@ void *process_commands(void* arg)
 					ssName << NodeName;
 					ssZone << NodeZone;
 					string result = "MSG~ZWave Name set Node=" + ssNode.str() + " Name=" + ssName.str() + " Zone=" + ssZone.str() + "\n";
-					thread_sock << result;
+					thread_sock << "CMD&SETNODE result: " << result;
 					
 					//save details to XML
 					Manager::Get()->WriteConfig(g_homeId);
@@ -677,7 +677,7 @@ void *process_commands(void* arg)
 					
 						Manager::Get()->CancelControllerCommand(g_homeId);
 						string result = "MSG~Zwave Controoler cancel cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "addd") {
 				
@@ -687,7 +687,7 @@ void *process_commands(void* arg)
 							    Driver::ControllerCommand_AddDevice,
 							    controller_update ,NULL, true);
 						string result = "MSG~Zwave Controoler addd cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "cprim") {
 					
@@ -695,7 +695,7 @@ void *process_commands(void* arg)
 							    Driver::ControllerCommand_CreateNewPrimary,
 							    controller_update, NULL, true);
 						string result = "MSG~Zwave Controoler cprim cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "rconf") {
 					
@@ -703,7 +703,7 @@ void *process_commands(void* arg)
 							    Driver::ControllerCommand_ReceiveConfiguration,
 							    controller_update, NULL, true);
 						string result = "MSG~Zwave Controoler rconf cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "remd") {
 					
@@ -711,25 +711,25 @@ void *process_commands(void* arg)
 							    Driver::ControllerCommand_RemoveDevice,
 							    controller_update, NULL, true);
 						string result = "MSG~Zwave Controoler remd cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "reset") {
 					
 						Manager::Get()->ResetController(g_homeId);
 						string result = "MSG~Zwave Controoler reset cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "sreset") {
 					
 						Manager::Get()->SoftReset(g_homeId);
 						string result = "MSG~Zwave Controoler sreset cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 				    	
 					} else if (subcommand == "exit") {
 					 
 						Manager::Get()->RemoveDriver(port);
 						string result = "MSG~Zwave Controoler exit cmd~Done\n";
-						thread_sock << result;
+						thread_sock << "CMD&CONTROLLER result: " << result;
 
 					}
 
