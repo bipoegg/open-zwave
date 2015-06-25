@@ -125,7 +125,12 @@ const Socket& Socket::operator << ( const std::string& s ) const
 {
   if ( ! send ( s ) )
     {
-      throw SocketException ( "Could not write to socket." );
+      //throw SocketException ( "Could not write to socket." );
+      printf("============================\n");
+      printf("Could not write to socket.\n");
+      printf("============================\n");
+      return *this;
+
     }
 
   return *this;
@@ -136,7 +141,13 @@ const Socket& Socket::operator >> ( std::string& s ) const
 {
   if(recv(s) < 0)
     {
-      throw SocketException ( "Could not read from socket." );
+      //throw SocketException ( "Could not read from socket." );
+      //
+      printf("============================\n");
+      printf("Could not read from socket.\n");
+      printf("============================\n");
+
+      return *this;
     }
 
   return *this;
