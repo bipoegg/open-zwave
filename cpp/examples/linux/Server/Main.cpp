@@ -350,56 +350,72 @@ string trim(string s) {
 void controller_update (Driver::ControllerState cs, Driver::ControllerError err, void *ct)
 {
   string s;
+  string st;
   bool more = true;
  
   switch (cs) {
   case Driver::ControllerState_Normal:
-    s = ": no command in progress.";
+    st = "Normal";
+    s = "~no command in progress.";
     break;
   case Driver::ControllerState_Starting:
-    s = ": starting controller command.";
+    st = "Starting";
+    s = "~starting controller command.";
     break;
   case Driver::ControllerState_Cancel:
-    s = ": command was cancelled.";
+    st = "Cancel";
+    s = "~command was cancelled.";
     more = false;
     break;
   case Driver::ControllerState_Error:
-    s = ": command returned an error: ";
+    st = "Error";
+    s = "~command returned an error: ";
     more = false;
     break;
   case Driver::ControllerState_Sleeping:
-    s = ": device went to sleep.";
+    st = "Sleeping";
+    s = "~device went to sleep.";
     more = false;
     break;
   case Driver::ControllerState_Waiting:
-    s = ": waiting for a user action.";
+    st = "Waiting";
+    s = "~waiting for a user action.";
     break;
   case Driver::ControllerState_InProgress:
-    s = ": communicating with the other device.";
+    st = "InProgress";
+    s = "~communicating with the other device.";
     break;
   case Driver::ControllerState_Completed:
-    s = ": command has completed successfully.";
+    st = "Completed";
+    s = "~command has completed successfully.";
     more = false;
     break;
-
   case Driver::ControllerState_Failed:
-    s = ": command has failed.";
+    st = "Failed";
+    s = "~command has failed.";
     more = false;
     break;
   case Driver::ControllerState_NodeOK:
-    s = ": the node is OK.";
+    st = "NodeOK";
+    s = "~the node is OK.";
     more = false;
     break;
   case Driver::ControllerState_NodeFailed:
-    s = ": the node has failed.";
+    st = "NodeFailed";
+    s = "~the node has failed.";
     more = false;
     break;
   default:
-    s = ": unknown respose.";
+    st = "unknown";
+    s = "~unknown respose.";
     break;
   }
   if (err != Driver::ControllerError_None)
     s  = s + controllerErrorStr(err);
+
+  if (rspSocketInt != 0) {
+    rspSocket << "controllerstatus~" << st << s << "\n";
+  }
 
   printf("%s\n", s.c_str());
 }
