@@ -22,7 +22,7 @@ DEBUG_LDFLAGS   := -g
 
 # Change for DEBUG or RELEASE
 CFLAGS  := -c $(DEBUG_CFLAGS)
-LDFLAGS := $(DEBUG_LDFLAGS)
+LDFLAGS := $(DEBUG_LDFLAGS) -static
 
 INCLUDES	:= -I ../../../src -I ../../../src/command_classes/ -I ../../../src/value_classes/ \
         	-I ../../../src/platform/ -I ../../../h/platform/unix -I ../../../tinyxml/ \
@@ -44,7 +44,7 @@ Socket: Socket.o
 	$(LD) -o Socket.o Socket.cpp
 
 $(top_srcdir)/Server: Main.o Socket.o zwavelib.o
-	$(LD) -o $@ $(LDFLAGS) $< $(LIBS) Socket.o zwavelib.o -pthread -ludev
+	$(LD) -o $@ $(LDFLAGS) $< $(LIBS) Socket.o zwavelib.o -pthread -ludev -lrt
 
 clean:
 	rm -f test Main.o Socket.o zwavelib.o
