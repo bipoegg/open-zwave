@@ -229,7 +229,7 @@ bool WakeUp::HandleMsg
 			// but only if node is not a listening device. Hybrid devices that can be
 			// powered by other then batteries shouldn't do this.
 			Node *node = GetNodeUnsafe();
-			if( GetDriver()->GetNodeId() != targetNodeId && ((node) && (!node->IsListeningDevice())) )
+			if( GetDriver()->GetControllerNodeId() != targetNodeId && ((node) && (!node->IsListeningDevice())) )
 			{
 				SetValue( *value );
 			}
@@ -311,7 +311,7 @@ bool WakeUp::SetValue
 		msg->Append( (uint8)(( interval >> 16 ) & 0xff) );
 		msg->Append( (uint8)(( interval >> 8 ) & 0xff) );
 		msg->Append( (uint8)( interval & 0xff ) );
-		msg->Append( GetDriver()->GetNodeId() );
+		msg->Append( GetDriver()->GetControllerNodeId() );
 		msg->Append( GetDriver()->GetTransmitOptions() );
 		GetDriver()->SendMsg( msg, Driver::MsgQueue_WakeUp );
 		return true;
@@ -409,6 +409,10 @@ void WakeUp::QueueMsg
 			++it;
 		}
 	}
+	/* make sure the SendAttempts is reset to 0 */
+	if (_item.m_command == Driver::MsgQueueCmd_SendMsg)
+		_item.m_msg->SetSendAttempts(0);
+
 	m_pendingQueue.push_back( _item );
 	m_mutex->Unlock();
 }

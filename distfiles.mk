@@ -15,6 +15,7 @@ DISTFILES =	.gitignore \
 	config/BeNext/BuiltinDimmer.xml \
 	config/BeNext/DoorSensor.xml \
 	config/BeNext/EnergySwitch.xml \
+	config/BeNext/HeatingControl.xml \
 	config/BeNext/Molite.xml \
 	config/BeNext/PluginDimmer.xml \
 	config/BeNext/SceneController.xml \
@@ -26,16 +27,30 @@ DISTFILES =	.gitignore \
 	config/act/zir010.xml \
 	config/act/zrp110.xml \
 	config/act/zrw103.xml \
-	config/aeon_labs/alms.xml \
-	config/aeon_labs/doorwindow.xml \
-	config/aeon_labs/dsd31.xml \
-	config/aeon_labs/hem.xml \
-	config/aeon_labs/hemg2.xml \
-	config/aeon_labs/keyfob.xml \
-	config/aeon_labs/minimote.xml \
-	config/aeon_labs/recessed_doorsensor.xml \
-	config/aeon_labs/ses.xml \
-	config/aeon_labs/ses2.xml \
+	config/aeotec/alms.xml \
+	config/aeotec/doorbell_gen5.xml \
+	config/aeotec/doorwindow.xml \
+	config/aeotec/drycontactsensor.xml \
+	config/aeotec/dsd31.xml \
+	config/aeotec/hdss_gen5.xml \
+	config/aeotec/hem.xml \
+	config/aeotec/hemg2.xml \
+	config/aeotec/keyfob.xml \
+	config/aeotec/keyfob2.xml \
+	config/aeotec/ledbulb.xml \
+	config/aeotec/minimote.xml \
+	config/aeotec/msesv2.xml \
+	config/aeotec/multisensor6.xml \
+	config/aeotec/multisensor_gen5.xml \
+	config/aeotec/panicbtn.xml \
+	config/aeotec/recessed_doorsensor.xml \
+	config/aeotec/recessed_doorsensor_gen5.xml \
+	config/aeotec/sd6.xml \
+	config/aeotec/ses.xml \
+	config/aeotec/ses2.xml \
+	config/aeotec/ss6.xml \
+	config/aeotec/watersensor.xml \
+	config/aeotec/zstickgen5.xml \
 	config/assa_abloy/RealLivingCapTouch.xml \
 	config/cooper/RF9505-T.xml \
 	config/cooper/RF9540-N.xml \
@@ -44,17 +59,24 @@ DISTFILES =	.gitignore \
 	config/device_classes.xml \
 	config/device_classes.xsd \
 	config/device_configuration.xsd \
+	config/dlink/dch-z110.xml \
 	config/dragontech/wd-100.xml \
 	config/duwi/ZWES1000.xml \
 	config/duwi/ZWESJ300.xml \
 	config/eurotronic/eur_stellaz.xml \
+	config/everspring/ad146.xml \
+	config/everspring/ad147.xml \
 	config/everspring/an145.xml \
 	config/everspring/an158.xml \
+	config/everspring/an179.xml \
+	config/everspring/an180.xml \
+	config/everspring/hsp02.xml \
 	config/everspring/se812.xml \
 	config/everspring/sf812.xml \
 	config/everspring/sm103.xml \
 	config/everspring/sp103.xml \
 	config/everspring/sp814.xml \
+	config/everspring/st812.xml \
 	config/everspring/st814.xml \
 	config/everspring/st815.xml \
 	config/everspring/tse03.xml \
@@ -64,6 +86,7 @@ DISTFILES =	.gitignore \
 	config/evolve/ltm-5.xml \
 	config/fibaro/fgbs001.xml \
 	config/fibaro/fgd211.xml \
+	config/fibaro/fgd212.xml \
 	config/fibaro/fgfs101.xml \
 	config/fibaro/fgk001.xml \
 	config/fibaro/fgms.xml \
@@ -71,7 +94,9 @@ DISTFILES =	.gitignore \
 	config/fibaro/fgrgbwm441.xml \
 	config/fibaro/fgrm222.xml \
 	config/fibaro/fgs211.xml \
+	config/fibaro/fgs212.xml \
 	config/fibaro/fgs221.xml \
+	config/fibaro/fgs222.xml \
 	config/fibaro/fgsd002.xml \
 	config/fibaro/fgss101.xml \
 	config/fibaro/fgwpe.xml \
@@ -81,6 +106,7 @@ DISTFILES =	.gitignore \
 	config/ge/relay.xml \
 	config/greenwave/powernode1.xml \
 	config/greenwave/powernode6.xml \
+	config/homeseer/ezmotionplus.xml \
 	config/homeseer/hsm100.xml \
 	config/homeseer/ztroller.xml \
 	config/honeywell/th8320zw1000.xml \
@@ -92,8 +118,20 @@ DISTFILES =	.gitignore \
 	config/leviton/vrf01.xml \
 	config/leviton/vri06.xml \
 	config/leviton/vri10.xml \
+	config/linear/PD300Z-2.xml \
+	config/linear/WD500Z-1.xml \
 	config/manufacturer_specific.xml \
 	config/manufacturer_specific.xsd \
+	config/mcohome/mhs311.xml \
+	config/mcohome/mhs312.xml \
+	config/mcohome/mhs314.xml \
+	config/mcohome/mhs411.xml \
+	config/mcohome/mhs412.xml \
+	config/mcohome/mhs513.xml \
+	config/merten/50x5xx.xml \
+	config/nodon/asp3100SmartPlug.xml \
+	config/nodon/crc3100OctanRemote.xml \
+	config/nodon/cws3101wallswitch.xml \
 	config/northq/nq92021.xml \
 	config/options.xml \
 	config/options.xsd \
@@ -104,12 +142,15 @@ DISTFILES =	.gitignore \
 	config/philio/pst02.xml \
 	config/polycontrol/doorlock.xml \
 	config/polycontrol/keypad.xml \
+	config/polycontrol/polylock.xml \
 	config/popp/123580.xml \
 	config/popp/123601.xml \
 	config/popp/123658.xml \
 	config/qees/reto-plugin-switch.xml \
 	config/qubino/ZMNHAA2.xml \
+	config/qubino/ZMNHAD1.xml \
 	config/qubino/ZMNHBA2.xml \
+	config/qubino/ZMNHBD2.xml \
 	config/qubino/ZMNHCA2.xml \
 	config/qubino/ZMNHDA2.xml \
 	config/qubino/ZMNHIA2.xml \
@@ -122,13 +163,17 @@ DISTFILES =	.gitignore \
 	config/remotec/zfm-80.xml \
 	config/remotec/zurc.xml \
 	config/remotec/zxt-120.xml \
+	config/schlage/BE469NXCEN.xml \
 	config/schlagelink/itemp.xml \
 	config/schlagelink/minikeypad.xml \
 	config/swiid/swiidinter.xml \
+	config/swiid/swiidplug.xml \
+	config/thermofloor/multireg.xml \
 	config/trane/TZEMT400AB32MAA.xml \
 	config/trane/TZEMT400BB32MAA.xml \
 	config/vision/zd2102.xml \
 	config/vision/zm1601eu.xml \
+	config/vision/zm1602eu.xml \
 	config/vision/zp3102.xml \
 	config/vision/zs5101eu.xml \
 	config/vitrum/vitrumBS.xml \
@@ -140,12 +185,14 @@ DISTFILES =	.gitignore \
 	config/wenzhou/tz67.xml \
 	config/wenzhou/tz88.xml \
 	config/widom/UBS104.xml \
+	config/widom/UME304C_S.xml \
 	config/zipato/MiniKeypad.xml \
 	config/zipato/RGBBulb.xml \
 	config/zwave.me/ZME_05431.xml \
 	config/zwave.me/ZME_06433.xml \
 	config/zwave.me/ZME_06436.xml \
 	config/zwave.me/ZME_064435.xml \
+	config/zwave.me/ZME_WALLC-S.xml \
 	config/zwave.me/ZME_WCD2.xml \
 	config/zwave.me/iTemp.xml \
 	config/zwave.me/kfob.xml \
@@ -154,6 +201,7 @@ DISTFILES =	.gitignore \
 	cpp/build/Makefile \
 	cpp/build/OZW_RunTests.sh \
 	cpp/build/libopenzwave.pc.in \
+	cpp/build/ozw_config.in \
 	cpp/build/sh2ju.sh \
 	cpp/build/support.mk \
 	cpp/build/windows/GIT-VS-VERSION-GEN.bat \
@@ -232,6 +280,7 @@ DISTFILES =	.gitignore \
 	cpp/src/Msg.h \
 	cpp/src/Node.cpp \
 	cpp/src/Node.h \
+	cpp/src/Notification.cpp \
 	cpp/src/Notification.h \
 	cpp/src/OZWException.h \
 	cpp/src/Options.cpp \
@@ -240,6 +289,8 @@ DISTFILES =	.gitignore \
 	cpp/src/Scene.h \
 	cpp/src/Utils.cpp \
 	cpp/src/Utils.h \
+	cpp/src/ZWSecurity.cpp \
+	cpp/src/ZWSecurity.h \
 	cpp/src/aes/aes.h \
 	cpp/src/aes/aes.txt \
 	cpp/src/aes/aes_modes.c \
@@ -273,6 +324,8 @@ DISTFILES =	.gitignore \
 	cpp/src/command_classes/ClimateControlSchedule.h \
 	cpp/src/command_classes/Clock.cpp \
 	cpp/src/command_classes/Clock.h \
+	cpp/src/command_classes/Color.cpp \
+	cpp/src/command_classes/Color.h \
 	cpp/src/command_classes/CommandClass.cpp \
 	cpp/src/command_classes/CommandClass.h \
 	cpp/src/command_classes/CommandClasses.cpp \
@@ -281,6 +334,8 @@ DISTFILES =	.gitignore \
 	cpp/src/command_classes/Configuration.h \
 	cpp/src/command_classes/ControllerReplication.cpp \
 	cpp/src/command_classes/ControllerReplication.h \
+	cpp/src/command_classes/DeviceResetLocally.cpp \
+	cpp/src/command_classes/DeviceResetLocally.h \
 	cpp/src/command_classes/DoorLock.cpp \
 	cpp/src/command_classes/DoorLock.h \
 	cpp/src/command_classes/DoorLockLogging.cpp \
@@ -355,6 +410,8 @@ DISTFILES =	.gitignore \
 	cpp/src/command_classes/Version.h \
 	cpp/src/command_classes/WakeUp.cpp \
 	cpp/src/command_classes/WakeUp.h \
+	cpp/src/command_classes/ZWavePlusInfo.cpp \
+	cpp/src/command_classes/ZWavePlusInfo.h \
 	cpp/src/platform/Controller.cpp \
 	cpp/src/platform/Controller.h \
 	cpp/src/platform/Event.cpp \
@@ -448,15 +505,16 @@ DISTFILES =	.gitignore \
 	debian/control \
 	debian/copyright \
 	debian/format \
-	debian/libopenzwave1.0-dev.install \
-	debian/libopenzwave1.0.install \
-	debian/libopenzwave1.0.links \
-	debian/libopenzwave1.0.lintian-overrides \
+	debian/libopenzwave1.3-dev.install \
+	debian/libopenzwave1.3.install \
+	debian/libopenzwave1.3.links \
+	debian/libopenzwave1.3.lintian-overrides \
 	debian/openzwave.install \
 	debian/patches/series \
 	debian/postinst \
+	debian/postrm \
 	debian/rules \
-	debian/shlibs.libopenzwave1.0 \
+	debian/shlibs.libopenzwave1.3 \
 	debian/source/format \
 	debian/version-increment.sh \
 	dist.mk \
@@ -536,6 +594,7 @@ DISTFILES =	.gitignore \
 	dotnet/src/app.ico \
 	dotnet/src/app.rc \
 	dotnet/src/resource.h \
+	license/Apache-License-2.0.txt \
 	license/gpl.txt \
 	license/lgpl.txt \
 	license/license.txt \

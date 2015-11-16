@@ -33,8 +33,10 @@
 #include "Driver.h"
 #include "Notification.h"
 #include "Msg.h"
+#include "ZWSecurity.h"
 #include "platform/Log.h"
 #include "platform/Mutex.h"
+#include "Utils.h"
 
 #include "tinyxml.h"
 
@@ -46,12 +48,15 @@
 #include "command_classes/ControllerReplication.h"
 #include "command_classes/ManufacturerSpecific.h"
 #include "command_classes/MultiInstance.h"
+#include "command_classes/MultiInstanceAssociation.h"
 #include "command_classes/Security.h"
 #include "command_classes/WakeUp.h"
 #include "command_classes/NodeNaming.h"
 #include "command_classes/NoOperation.h"
 #include "command_classes/Version.h"
 #include "command_classes/SwitchAll.h"
+#include "command_classes/ZWavePlusInfo.h"
+#include "command_classes/DeviceResetLocally.h"
 
 #include "Scene.h"
 
@@ -77,27 +82,31 @@ using namespace OpenZWave;
 bool Node::s_deviceClassesLoaded = false;
 map<uint8,string> Node::s_basicDeviceClasses;
 map<uint8,Node::GenericDeviceClass*> Node::s_genericDeviceClasses;
+map<uint8,Node::DeviceClass*> Node::s_roleDeviceClasses;
+map<uint16,Node::DeviceClass*> Node::s_deviceTypeClasses;
+map<uint8,Node::DeviceClass*> Node::s_nodeTypes;
 
 static char const* c_queryStageNames[] =
 {
-	"None",
-	"ProtocolInfo",
-	"Probe",
-	"WakeUp",
-	"ManufacturerSpecific1",
-	"NodeInfo",
-	"SecurityReport",
-	"ManufacturerSpecific2",
-	"Versions",
-	"Instances",
-	"Static",
-	"Probe1",
-	"Associations",
-	"Neighbors",
-	"Session",
-	"Dynamic",
-	"Configuration",
-	"Complete"
+		"None",
+		"ProtocolInfo",
+		"Probe",
+		"WakeUp",
+		"ManufacturerSpecific1",
+		"NodeInfo",
+		"NodePlusInfo",
+		"SecurityReport",
+		"ManufacturerSpecific2",
+		"Versions",
+		"Instances",
+		"Static",
+		"Probe1",
+		"Associations",
+		"Neighbors",
+		"Session",
+		"Dynamic",
+		"Configuration",
+		"Complete"
 };
 
 //-----------------------------------------------------------------------------
@@ -106,57 +115,66 @@ static char const* c_queryStageNames[] =
 //-----------------------------------------------------------------------------
 Node::Node
 (
-	uint32 const _homeId,
-	uint8 const _nodeId
+		uint32 const _homeId,
+		uint8 const _nodeId
 ):
-	m_queryStage( QueryStage_None ),
-	m_queryPending( false ),
-	m_queryConfiguration( false ),
-	m_queryRetries( 0 ),
-	m_protocolInfoReceived( false ),
-	m_nodeInfoReceived( false ),
-	m_manufacturerSpecificClassReceived( false ),
-	m_nodeInfoSupported( true ),
-	m_nodeAlive( true ),	// assome live node
-	m_listening( true ),	// assume we start out listening
-	m_frequentListening( false ),
-	m_beaming( false ),
-	m_routing( false ),
-	m_maxBaudRate( 0 ),
-	m_version( 0 ),
-	m_security( false ),
-	m_homeId( _homeId ),
-	m_nodeId( _nodeId ),
-	m_basic( 0 ),
-	m_generic( 0 ),
-	m_specific( 0 ),
-	m_type( "" ),
-	m_numRouteNodes( 0 ),
-	m_addingNode( false ),
-	m_manufacturerName( "" ),
-	m_productName( "" ),
-	m_nodeName( "" ),
-	m_location( "" ),
-	m_manufacturerId( "" ),
-	m_productType( "" ),
-	m_productId( "" ),
-	m_values( new ValueStore() ),
-	m_sentCnt( 0 ),
-	m_sentFailed( 0 ),
-	m_retries( 0 ),
-	m_receivedCnt( 0 ),
-	m_receivedDups( 0 ),
-	m_receivedUnsolicited( 0 ),
-	m_lastRequestRTT( 0 ),
-	m_lastResponseRTT( 0 ),
-	m_averageRequestRTT( 0 ),
-	m_averageResponseRTT( 0 ),
-	m_quality( 0 ),
-	m_lastReceivedMessage(),
-	m_errors( 0 )
+m_queryStage( QueryStage_None ),
+m_queryPending( false ),
+m_queryConfiguration( false ),
+m_queryRetries( 0 ),
+m_protocolInfoReceived( false ),
+m_basicprotocolInfoReceived( false ),
+m_nodeInfoReceived( false ),
+m_nodePlusInfoReceived( false ),
+m_manufacturerSpecificClassReceived( false ),
+m_nodeInfoSupported( true ),
+m_refreshonNodeInfoFrame ( true ),
+m_nodeAlive( true ),	// assome live node
+m_listening( true ),	// assume we start out listening
+m_frequentListening( false ),
+m_beaming( false ),
+m_routing( false ),
+m_maxBaudRate( 0 ),
+m_version( 0 ),
+m_security( false ),
+m_homeId( _homeId ),
+m_nodeId( _nodeId ),
+m_basic( 0 ),
+m_generic( 0 ),
+m_specific( 0 ),
+m_type( "" ),
+m_numRouteNodes( 0 ),
+m_addingNode( false ),
+m_manufacturerName( "" ),
+m_productName( "" ),
+m_nodeName( "" ),
+m_location( "" ),
+m_manufacturerId( "" ),
+m_productType( "" ),
+m_productId( "" ),
+m_deviceType( 0 ),
+m_role( 0 ),
+m_nodeType ( 0 ),
+m_secured ( false ),
+m_values( new ValueStore() ),
+m_sentCnt( 0 ),
+m_sentFailed( 0 ),
+m_retries( 0 ),
+m_receivedCnt( 0 ),
+m_receivedDups( 0 ),
+m_receivedUnsolicited( 0 ),
+m_lastRequestRTT( 0 ),
+m_lastResponseRTT( 0 ),
+m_averageRequestRTT( 0 ),
+m_averageResponseRTT( 0 ),
+m_quality( 0 ),
+m_lastReceivedMessage(),
+m_errors( 0 ),
+m_lastnonce ( 0 )
 {
 	memset( m_neighbors, 0, sizeof(m_neighbors) );
 	memset( m_routeNodes, 0, sizeof(m_routeNodes) );
+	memset( m_nonces, 0, sizeof(m_nonces) );
 	AddCommandClass( 0 );
 }
 
@@ -273,10 +291,11 @@ void Node::AdvanceQueries
 				// will determine next step.
 				//
 				NoOperation* noop = static_cast<NoOperation*>( GetCommandClass( NoOperation::StaticGetCommandClassId() ) );
-				if( GetDriver()->GetNodeId() != m_nodeId )
+				/* don't Probe the Controller */
+				if( GetDriver()->GetControllerNodeId() != m_nodeId )
 				{
 					noop->Set( true );
-				      	m_queryPending = true;
+					m_queryPending = true;
 					addQSC = true;
 				}
 				else
@@ -318,8 +337,11 @@ void Node::AdvanceQueries
 				// Manufacturer Specific data is requested before the other command class data so
 				// that we can modify the supported command classes list through the product XML files.
 				Log::Write( LogLevel_Detail, m_nodeId, "QueryStage_ManufacturerSpecific1" );
-				if( GetDriver()->GetNodeId() == m_nodeId )
+
+				/* if its the Controller, then we can just load up the XML straight away */
+				if( GetDriver()->GetControllerNodeId() == m_nodeId )
 				{
+					Log::Write( LogLevel_Detail, m_nodeId, "Load Controller Manufacturer Specific Config");
 					string configPath = ManufacturerSpecific::SetProductDetails( this, GetDriver()->GetManufacturerId(), GetDriver()->GetProductType(), GetDriver()->GetProductId() );
 					if( configPath.length() > 0 )
 					{
@@ -330,6 +352,13 @@ void Node::AdvanceQueries
 				}
 				else
 				{
+					Log::Write( LogLevel_Detail, m_nodeId, "Checking for ManufacturerSpecific CC and Requesting values if present on this node");
+					/* if the ManufacturerSpecific CC was not specified in the ProtocolInfo packet for the Generic/Specific Device type (as part a Mandatory Command Class)
+					 * then this will fail, but we will retry in ManufacturerSpecific2
+					 *
+					 * XXX TODO: This could probably be reworked a bit to make this a Mandatory CC for all devices regardless
+					 * of Generic/Specific Type. Then we can drop the Second ManufacturerSpecific QueryStage later.
+					 */
 					ManufacturerSpecific* cc = static_cast<ManufacturerSpecific*>( GetCommandClass( ManufacturerSpecific::StaticGetCommandClassId() ) );
 					if( cc  )
 					{
@@ -346,7 +375,7 @@ void Node::AdvanceQueries
 			}
 			case QueryStage_NodeInfo:
 			{
-				if( !NodeInfoReceived() && m_nodeInfoSupported )
+				if( !NodeInfoReceived() && m_nodeInfoSupported && (GetDriver()->GetControllerNodeId() != m_nodeId))
 				{
 					// obtain from the node a list of command classes that it 1) supports and 2) controls (separated by a mark in the buffer)
 					Log::Write( LogLevel_Detail, m_nodeId, "QueryStage_NodeInfo" );
@@ -359,9 +388,31 @@ void Node::AdvanceQueries
 				else
 				{
 					// This stage has been done already, so move to the Manufacturer Specific stage
+					m_queryStage = QueryStage_NodePlusInfo;
+					m_queryRetries = 0;
+				}
+				break;
+			}
+			case QueryStage_NodePlusInfo:
+			{
+				Log::Write( LogLevel_Detail, m_nodeId, "QueryStage_NodePlusInfo" );
+				ZWavePlusInfo* pluscc = static_cast<ZWavePlusInfo*>( GetCommandClass( ZWavePlusInfo::StaticGetCommandClassId() ) );
+
+				if ( pluscc )
+				{
+					m_queryPending = pluscc->RequestState( CommandClass::RequestFlag_Static, 1, Driver::MsgQueue_Query );
+				}
+				if (m_queryPending) 
+				{
+					addQSC = m_queryPending;
+				} 
+				else 
+				{
+					// this is not a Zwave+ node, so move onto the next querystage
 					m_queryStage = QueryStage_SecurityReport;
 					m_queryRetries = 0;
 				}
+
 				break;
 			}
 			case QueryStage_SecurityReport:
@@ -375,13 +426,13 @@ void Node::AdvanceQueries
 
 				if( seccc )
 				{
-					// start the process of requesting node state from this sleeping device
+					// start the process setting up the Security CommandClass
 					m_queryPending = seccc->Init();
-					/* Dont add a Notification Callback here, as this is a multipacket exchange.
+					/* Dont add a QueryStageComplete flag here, as this is a multipacket exchange.
 					 * the Security Command Class will automatically advance the Query Stage
 					 * when we recieve a SecurityCmd_SupportedReport
 					 */
-					addQSC = false;
+					addQSC = true;
 				}
 				else
 				{
@@ -431,11 +482,15 @@ void Node::AdvanceQueries
 				Version* vcc = static_cast<Version*>( GetCommandClass( Version::StaticGetCommandClassId() ) );
 				if( vcc )
 				{
+					Log::Write(LogLevel_Info, m_nodeId, "Requesting Versions");
 					for( map<uint8,CommandClass*>::const_iterator it = m_commandClassMap.begin(); it != m_commandClassMap.end(); ++it )
 					{
 						CommandClass* cc = it->second;
+						Log::Write(LogLevel_Info, m_nodeId, "Requesting Versions for %s", cc->GetCommandClassName().c_str());
+
 						if( cc->GetMaxVersion() > 1 )
 						{
+							Log::Write(LogLevel_Info, m_nodeId, "	ok");
 							// Get the version for each supported command class that
 							// we have implemented at greater than version one.
 							m_queryPending |= vcc->RequestCommandClassVersion( it->second );
@@ -511,10 +566,11 @@ void Node::AdvanceQueries
 				// will determine next step. Called here when configuration exists.
 				//
 				NoOperation* noop = static_cast<NoOperation*>( GetCommandClass( NoOperation::StaticGetCommandClassId() ) );
-				if( GetDriver()->GetNodeId() != m_nodeId )
+				/* Don't do this if its to the Controller */
+				if( GetDriver()->GetControllerNodeId() != m_nodeId )
 				{
 					noop->Set( true );
-				      	m_queryPending = true;
+					m_queryPending = true;
 					addQSC = true;
 				}
 				else
@@ -528,18 +584,28 @@ void Node::AdvanceQueries
 			{
 				// if this device supports COMMAND_CLASS_ASSOCIATION, determine to which groups this node belong
 				Log::Write( LogLevel_Detail, m_nodeId, "QueryStage_Associations" );
-				Association* acc = static_cast<Association*>( GetCommandClass( Association::StaticGetCommandClassId() ) );
-				if( acc )
+				MultiInstanceAssociation* macc = static_cast<MultiInstanceAssociation*>( GetCommandClass( MultiInstanceAssociation::StaticGetCommandClassId() ) );
+				if( macc )
 				{
-					acc->RequestAllGroups( 0 );
+					macc->RequestAllGroups( 0 );
 					m_queryPending = true;
 					addQSC = true;
 				}
 				else
 				{
-					// if this device doesn't support Associations, move to retrieve Session information
-					m_queryStage = QueryStage_Neighbors;
-					m_queryRetries = 0;
+					Association* acc = static_cast<Association*>( GetCommandClass( Association::StaticGetCommandClassId() ) );
+					if( acc )
+					{
+						acc->RequestAllGroups( 0 );
+						m_queryPending = true;
+						addQSC = true;
+					}
+					else
+					{
+						// if this device doesn't support Associations, move to retrieve Session information
+						m_queryStage = QueryStage_Neighbors;
+						m_queryRetries = 0;
+					}
 				}
 				break;
 			}
@@ -641,7 +707,7 @@ void Node::AdvanceQueries
 //-----------------------------------------------------------------------------
 void Node::QueryStageComplete
 (
-	QueryStage const _stage
+		QueryStage const _stage
 )
 {
 	// Check that we are actually on the specified stage
@@ -669,8 +735,8 @@ void Node::QueryStageComplete
 //-----------------------------------------------------------------------------
 void Node::QueryStageRetry
 (
-	QueryStage const _stage,
-	uint8 const _maxAttempts // = 0
+		QueryStage const _stage,
+		uint8 const _maxAttempts // = 0
 )
 {
 	Log::Write( LogLevel_Info, m_nodeId, "QueryStageRetry stage %s requested stage %s max %d retries %d pending %d", c_queryStageNames[_stage], c_queryStageNames[m_queryStage], _maxAttempts, m_queryRetries, m_queryPending);
@@ -702,8 +768,8 @@ void Node::QueryStageRetry
 //-----------------------------------------------------------------------------
 void Node::SetQueryStage
 (
-	QueryStage const _stage,
-	bool const _advance	// = true
+		QueryStage const _stage,
+		bool const _advance	// = true
 )
 {
 	if( (int)_stage < (int)m_queryStage )
@@ -728,7 +794,7 @@ void Node::SetQueryStage
 //-----------------------------------------------------------------------------
 string Node::GetQueryStageName
 (
-	QueryStage const _stage
+		QueryStage const _stage
 )
 {
 	return c_queryStageNames[_stage];
@@ -740,7 +806,7 @@ string Node::GetQueryStageName
 //-----------------------------------------------------------------------------
 uint32 Node::GetNeighbors
 (
-	uint8** o_neighbors
+		uint8** o_neighbors
 )
 {
 	// determine how many neighbors there are
@@ -754,7 +820,7 @@ uint32 Node::GetNeighbors
 	for( i = 0; i < 29; i++ )
 	{
 		for( unsigned char mask = 0x80; mask != 0; mask >>= 1 )
-		  if( ( m_neighbors[i] & mask ) != 0 )
+			if( ( m_neighbors[i] & mask ) != 0 )
 				numNeighbors++;
 	}
 
@@ -787,7 +853,7 @@ uint32 Node::GetNeighbors
 //-----------------------------------------------------------------------------
 void Node::ReadXML
 (
-	TiXmlElement const* _node
+		TiXmlElement const* _node
 )
 {
 	char const* str;
@@ -875,6 +941,24 @@ void Node::ReadXML
 		m_specific = (uint8)intVal;
 	}
 
+	if( TIXML_SUCCESS == _node->QueryIntAttribute( "roletype", &intVal ) )
+	{
+		m_role = (uint8)intVal;
+		m_nodePlusInfoReceived = true;
+	}
+
+	if( TIXML_SUCCESS == _node->QueryIntAttribute( "devicetype", &intVal ) )
+	{
+		m_deviceType = (uint16)intVal;
+		m_nodePlusInfoReceived = true;
+	}
+
+	if (TIXML_SUCCESS == _node->QueryIntAttribute ( "nodetype", &intVal ) )
+	{
+		m_nodeType = (uint8)intVal;
+		m_nodePlusInfoReceived = true;
+	}
+
 	str = _node->Attribute( "type" );
 	if( str )
 	{
@@ -928,12 +1012,24 @@ void Node::ReadXML
 		m_security = !strcmp( str, "true" );
 	}
 
+	m_secured = false;
+	str = _node->Attribute( "secured" );
+	if( str )
+	{
+		m_secured = !strcmp( str, "true" );
+	}
+
 	m_nodeInfoSupported = true;
 	str = _node->Attribute( "nodeinfosupported" );
 	if( str )
 	{
 		m_nodeInfoSupported = !strcmp( str, "true" );
 	}
+
+	m_refreshonNodeInfoFrame = true;
+	str = _node->Attribute( "refreshonnodeinfoframe" );
+	if ( str )
+		m_refreshonNodeInfoFrame = !strcmp (str, "true" );
 
 	// Read the manufacturer info and create the command classes
 	TiXmlElement const* child = _node->FirstChildElement();
@@ -1003,7 +1099,7 @@ void Node::ReadXML
 //-----------------------------------------------------------------------------
 void Node::ReadDeviceProtocolXML
 (
-	TiXmlElement const* _ccsElement
+		TiXmlElement const* _ccsElement
 )
 {
 	TiXmlElement const* ccElement = _ccsElement->FirstChildElement();
@@ -1016,6 +1112,12 @@ void Node::ReadDeviceProtocolXML
 			if( str )
 			{
 				m_nodeInfoSupported = !strcmp( str, "true" );
+			}
+
+			str = ccElement->Attribute( "refreshonnodeinfoframe" );
+			if ( str )
+			{
+				m_refreshonNodeInfoFrame = !strcmp( str, "true" );
 			}
 
 			// Some controllers support API calls that aren't advertised in their returned data.
@@ -1049,7 +1151,7 @@ void Node::ReadDeviceProtocolXML
 //-----------------------------------------------------------------------------
 void Node::ReadCommandClassesXML
 (
-	TiXmlElement const* _ccsElement
+		TiXmlElement const* _ccsElement
 )
 {
 	char const* str;
@@ -1084,6 +1186,12 @@ void Node::ReadCommandClassesXML
 				{
 					if( NULL == cc )
 					{
+						if (Security::StaticGetCommandClassId() == id && !GetDriver()->isNetworkKeySet()) {
+							Log::Write(LogLevel_Warning, "Security Command Class cannot be Loaded. NetworkKey is not set");
+							ccElement = ccElement->NextSiblingElement();
+							continue;
+						}
+
 						// Command class support does not exist yet, so we create it
 						cc = AddCommandClass( id );
 					}
@@ -1106,7 +1214,7 @@ void Node::ReadCommandClassesXML
 //-----------------------------------------------------------------------------
 void Node::WriteXML
 (
-	TiXmlElement* _driverElement
+		TiXmlElement* _driverElement
 )
 {
 	char str[32];
@@ -1129,6 +1237,18 @@ void Node::WriteXML
 	snprintf( str, 32, "%d", m_specific );
 	nodeElement->SetAttribute( "specific", str );
 
+	if( m_nodePlusInfoReceived )
+	{
+		snprintf( str, 32, "%d", m_role );
+		nodeElement->SetAttribute( "roletype", str );
+
+		snprintf( str, 32, "%d", m_deviceType );
+		nodeElement->SetAttribute( "devicetype", str );
+
+		snprintf( str, 32, "%d", m_nodeType );
+		nodeElement->SetAttribute ( "nodetype", str );
+	}
+
 	nodeElement->SetAttribute( "type", m_type.c_str() );
 
 	nodeElement->SetAttribute( "listening", m_listening ? "true" : "false" );
@@ -1143,13 +1263,24 @@ void Node::WriteXML
 	nodeElement->SetAttribute( "version", str );
 
 	if( m_security )
-        {
+	{
 		nodeElement->SetAttribute( "security", "true" );
 	}
+
+	if( m_secured )
+	{
+		nodeElement->SetAttribute( "secured", "true" );
+	}
+
 
 	if( !m_nodeInfoSupported )
 	{
 		nodeElement->SetAttribute( "nodeinfosupported", "false" );
+	}
+
+	if (!m_refreshonNodeInfoFrame)
+	{
+		nodeElement->SetAttribute( "refreshonnodeinfoframe", "false" );
 	}
 
 	nodeElement->SetAttribute( "query_stage", c_queryStageNames[m_queryStage] );
@@ -1192,7 +1323,7 @@ void Node::WriteXML
 //-----------------------------------------------------------------------------
 void Node::UpdateProtocolInfo
 (
-	uint8 const* _data
+		uint8 const* _data
 )
 {
 	if( ProtocolInfoReceived() )
@@ -1208,13 +1339,6 @@ void Node::UpdateProtocolInfo
 		SetNodeAlive( false );
 		return;
 	}
-
-	// Notify the watchers of the protocol info.
-	// We do the notification here so that it gets into the queue ahead of
-	// any other notifications generated by adding command classes etc.
-	Notification* notification = new Notification( Notification::Type_NodeProtocolInfo );
-	notification->SetHomeAndNodeIds( m_homeId, m_nodeId );
-	GetDriver()->QueueNotification( notification );
 
 	// Capabilities
 	m_listening = ( ( _data[0] & 0x80 ) != 0 );
@@ -1238,6 +1362,12 @@ void Node::UpdateProtocolInfo
 	// NOTE: We stopped using this because not all devices report it properly,
 	// and now just request the optional classes regardless.
 	// bool optional = (( _data[1] & 0x80 ) != 0 );
+	/* dont do any further processing if we have already recieved our Protocol Info, or basicprotocolInfo */
+	if( ProtocolInfoReceived())
+	{
+		// We already have this info
+		return;
+	}
 
 	Log::Write( LogLevel_Info, m_nodeId, "  Protocol Info for Node %d:", m_nodeId );
 	if( m_listening )
@@ -1253,15 +1383,112 @@ void Node::UpdateProtocolInfo
 	Log::Write( LogLevel_Info, m_nodeId, "    Version       = %d", m_version );
 	Log::Write( LogLevel_Info, m_nodeId, "    Security      = %s", m_security ? "true" : "false" );
 
-	// Set up the device class based data for the node, including mandatory command classes
-	SetDeviceClasses( _data[3], _data[4], _data[5] );
-	// Do this for every controller. A little extra work but it won't be a large file.
-	if( IsController() )
-	{
-		GetDriver()->ReadButtons( m_nodeId );
+	if (m_basicprotocolInfoReceived == false) {
+
+		// Notify the watchers of the protocol info.
+		// We do the notification here so that it gets into the queue ahead of
+		// any other notifications generated by adding command classes etc.
+		Notification* notification = new Notification( Notification::Type_NodeProtocolInfo );
+		notification->SetHomeAndNodeIds( m_homeId, m_nodeId );
+		GetDriver()->QueueNotification( notification );
+
+		// Set up the device class based data for the node, including mandatory command classes
+		SetDeviceClasses( _data[3], _data[4], _data[5] );
+		// Do this for every controller. A little extra work but it won't be a large file.
+		if( IsController() )
+		{
+			GetDriver()->ReadButtons( m_nodeId );
+		}
+		m_basicprotocolInfoReceived = true;
+	} else {
+		/* we have to setup the Wakeup CC if needed here, because
+		 * it wouldn't have been created in the SetProtocolInfo function, as we didn't
+		 * have the Device Flags then
+		 */
+		if( !m_listening && !IsFrequentListeningDevice())
+		{
+			// Device does not always listen, so we need the WakeUp handler.  We can't
+			// wait for the command class list because the request for the command
+			// classes may need to go in the wakeup queue itself!
+			if( CommandClass* pCommandClass = AddCommandClass( WakeUp::StaticGetCommandClassId() ) )
+			{
+				pCommandClass->SetInstance( 1 );
+			}
+		}
+
 	}
 	m_protocolInfoReceived = true;
 }
+
+void Node::SetProtocolInfo
+(
+		uint8 const* _protocolInfo,
+		uint8 const _length
+)
+{
+
+	if( ProtocolInfoReceived() || m_basicprotocolInfoReceived == true )
+	{
+		// We already have this info
+		return;
+	}
+
+	if( _protocolInfo[1] == 0 )
+	{
+		// Node doesn't exist if Generic class is zero.
+		Log::Write( LogLevel_Info, m_nodeId, "  Protocol Info for Node %d reports node nonexistent", m_nodeId );
+		SetNodeAlive( false );
+		return;
+	}
+
+	// Notify the watchers of the protocol info.
+	// We do the notification here so that it gets into the queue ahead of
+	// any other notifications generated by adding command classes etc.
+	Notification* notification = new Notification( Notification::Type_NodeProtocolInfo );
+	notification->SetHomeAndNodeIds( m_homeId, m_nodeId );
+	GetDriver()->QueueNotification( notification );
+
+
+	// Set up the device class based data for the node, including mandatory command classes
+	SetDeviceClasses( _protocolInfo[0], _protocolInfo[1], _protocolInfo[2] );
+
+	/* Remaining Bytes in _protocolInfo are the CommandClasses this device supports */
+	/* first iterate over them and check for the Security CC, as we want to quickly start exchanging the Network Keys
+	 * first (before other CC's start sending stuff and slowing down our exchange
+	 */
+	if (m_secured) {
+		if (Security *pCommandClass = static_cast<Security *>(GetCommandClass(Security::StaticGetCommandClassId()))) {
+			/* Security CC has already been loaded, most likely via the SetDeviceClasses Function above */
+			if (!GetDriver()->isNetworkKeySet()) {
+				Log::Write(LogLevel_Warning, m_nodeId, "Security Command Class Disabled. NetworkKey is not Set");
+			} else {
+				pCommandClass->ExchangeNetworkKeys();
+			}
+		} else {
+			/* Security CC is not loaded, see if its in our NIF frame and load if necessary */
+			for (int i = 3; i < _length; i++) {
+				if (_protocolInfo[i] == Security::StaticGetCommandClassId()) {
+					pCommandClass = static_cast<Security *>(AddCommandClass(_protocolInfo[i]));
+					if (!GetDriver()->isNetworkKeySet()) {
+						Log::Write(LogLevel_Warning, m_nodeId, "Security Command Class Disabled. NetworkKey is not Set");
+					} else {
+						pCommandClass->ExchangeNetworkKeys();
+					}
+				}
+			}
+		}
+	}
+	UpdateNodeInfo(&_protocolInfo[3], _length-3);
+
+
+	m_basicprotocolInfoReceived = true;
+}
+
+void Node::SetSecured(bool secure) {
+	m_secured = secure;
+}
+
+
 
 void Node::SetSecuredClasses
 (
@@ -1270,7 +1497,14 @@ void Node::SetSecuredClasses
 )
 {
 	uint32 i;
+	m_secured = true;
 	Log::Write( LogLevel_Info, m_nodeId, "  Secured command classes for node %d:", m_nodeId );
+
+	if (!GetDriver()->isNetworkKeySet()) {
+		Log::Write (LogLevel_Warning, m_nodeId, "  Secured Command Classes cannot be enabled as Network Key is not set");
+		return;
+	}
+
 
 	bool afterMark = false;
 	for( i=0; i<_length; ++i )
@@ -1287,14 +1521,26 @@ void Node::SetSecuredClasses
 		/* Check if this is a CC that is already registered with the node */
 		if (CommandClass *pCommandClass = GetCommandClass(_data[i]))
 		{
-			if (pCommandClass->IsSecureSupported()) {
-				pCommandClass->SetSecured();
-				Log::Write( LogLevel_Info, m_nodeId, "    %s (Secured)", pCommandClass->GetCommandClassName().c_str() );
+			/* if it was specified int he NIF frame, and came in as part of the Security SupportedReport message
+			 * then it can support both Clear Text and Secured Comms. So do a check first
+			 */
+			if (pCommandClass->IsInNIF()) {
+				/* if the CC Supports Security and our SecurityStrategy says we should encrypt it, then mark it as encrypted */
+				if (pCommandClass->IsSecureSupported() && (ShouldSecureCommandClass(_data[i]) == SecurityStrategy_Supported )) {
+					pCommandClass->SetSecured();
+					Log::Write( LogLevel_Info, m_nodeId, "    %s (Secured) - %s", pCommandClass->GetCommandClassName().c_str(), pCommandClass->IsInNIF() ? "InNIF": "NotInNIF");
+				}
+				/* if it wasn't in the NIF frame, then it will only support Secured Comms. */
 			} else {
-				Log::Write( LogLevel_Info, m_nodeId, "    %s (Downgraded)", pCommandClass->GetCommandClassName().c_str() );
+				if (pCommandClass->IsSecureSupported()) {
+					pCommandClass->SetSecured();
+					Log::Write( LogLevel_Info, m_nodeId, "    %s (Secured) - %s", pCommandClass->GetCommandClassName().c_str(), pCommandClass->IsInNIF() ? "InNIF": "NotInNIF");
+				}
 			}
 		}
-		/* it might be a new CC we havn't seen as part of the NIF */
+		/* it might be a new CC we havn't seen as part of the NIF. In that case
+		 * its only supported via the Security CC, so no need to check our SecurityStrategy, just
+		 * encrypt it regardless */
 		else if( CommandClasses::IsSupported( _data[i] ) )
 		{
 			if( CommandClass* pCommandClass = AddCommandClass( _data[i] ) )
@@ -1306,15 +1552,32 @@ void Node::SetSecuredClasses
 				}
 				if (pCommandClass->IsSecureSupported()) {
 					pCommandClass->SetSecured();
-					Log::Write( LogLevel_Info, m_nodeId, "    %s (Secured)", pCommandClass->GetCommandClassName().c_str() );
-				} else {
-					Log::Write( LogLevel_Info, m_nodeId, "    %s (Downgraded)", pCommandClass->GetCommandClassName().c_str() );
+					Log::Write( LogLevel_Info, m_nodeId, "    %s (Secured) - %s", pCommandClass->GetCommandClassName().c_str(), pCommandClass->IsInNIF() ? "InNIF" : "NotInNIF" );
 				}
 				// Start with an instance count of one.  If the device supports COMMMAND_CLASS_MULTI_INSTANCE
 				// then some command class instance counts will increase once the responses to the RequestState
 				// call at the end of this method have been processed.
 				pCommandClass->SetInstance( 1 );
 
+				/* set our Static Request Flags */
+				uint8 request = 0;
+
+				if( GetCommandClass( MultiInstance::StaticGetCommandClassId() ) )
+				{
+					// Request instances
+					request |= (uint8)CommandClass::StaticRequest_Instances;
+				}
+
+				if( GetCommandClass( Version::StaticGetCommandClassId() ) )
+				{
+					// Request versions
+					request |= (uint8)CommandClass::StaticRequest_Version;
+				}
+
+				if( request )
+				{
+					pCommandClass->SetStaticRequest( request );
+				}
 			}
 		}
 		else
@@ -1326,7 +1589,7 @@ void Node::SetSecuredClasses
 	for( map<uint8,CommandClass*>::const_iterator it = m_commandClassMap.begin(); it != m_commandClassMap.end(); ++it )
 	{
 		if (!it->second->IsSecured())
-			Log::Write( LogLevel_Info, m_nodeId, "    %s (Unsecured)", it->second->GetCommandClassName().c_str() );
+			Log::Write( LogLevel_Info, m_nodeId, "    %s (Unsecured) - %s", it->second->GetCommandClassName().c_str(), it->second->IsInNIF() ? "InNIF" : "NotInNIF" );
 	}
 
 
@@ -1337,8 +1600,8 @@ void Node::SetSecuredClasses
 //-----------------------------------------------------------------------------
 void Node::UpdateNodeInfo
 (
-	uint8 const* _data,
-	uint8 const _length
+		uint8 const* _data,
+		uint8 const _length
 )
 {
 	if( !NodeInfoReceived() )
@@ -1371,8 +1634,14 @@ void Node::UpdateNodeInfo
 
 			if( CommandClasses::IsSupported( _data[i] ) )
 			{
+				if (Security::StaticGetCommandClassId() == _data[i] && !GetDriver()->isNetworkKeySet()) {
+					Log::Write (LogLevel_Info, m_nodeId, "    %s (Disabled - Network Key Not Set)", Security::StaticGetCommandClassName().c_str());
+					continue;
+				}
 				if( CommandClass* pCommandClass = AddCommandClass( _data[i] ) )
 				{
+					/* this CC was in the NIF frame */
+					pCommandClass->SetInNIF();
 					// If this class came after the COMMAND_CLASS_MARK, then we do not create values.
 					if( afterMark )
 					{
@@ -1385,6 +1654,10 @@ void Node::UpdateNodeInfo
 					pCommandClass->SetInstance( 1 );
 					newCommandClasses = true;
 					Log::Write( LogLevel_Info, m_nodeId, "    %s", pCommandClass->GetCommandClassName().c_str() );
+				} else if (CommandClass *pCommandClass = GetCommandClass( _data[i] ) ) {
+					/* this CC was in the NIF frame */
+					pCommandClass->SetInNIF();
+					Log::Write( LogLevel_Info, m_nodeId, "    %s (Existing)", pCommandClass->GetCommandClassName().c_str() );
 				}
 			}
 			else
@@ -1404,8 +1677,9 @@ void Node::UpdateNodeInfo
 	}
 	else
 	{
-		// We probably only need to do the dynamic stuff
-		SetQueryStage( QueryStage_Dynamic );
+		/* Only Refresh if the Device Config Specifies it  - Only the dynamic stuff */
+		if (m_refreshonNodeInfoFrame)
+			SetQueryStage( QueryStage_Dynamic );
 	}
 
 	// Treat the node info frame as a sign that the node is awake
@@ -1421,7 +1695,7 @@ void Node::UpdateNodeInfo
 //-----------------------------------------------------------------------------
 void Node::SetNodeAlive
 (
-	bool const _isAlive
+		bool const _isAlive
 )
 {
 	Notification* notification;
@@ -1496,7 +1770,7 @@ void Node::SetStaticRequests
 //-----------------------------------------------------------------------------
 void Node::SetNodeName
 (
-	string const& _nodeName
+		string const& _nodeName
 )
 {
 	m_nodeName = _nodeName;
@@ -1517,7 +1791,7 @@ void Node::SetNodeName
 //-----------------------------------------------------------------------------
 void Node::SetLocation
 (
-	string const& _location
+		string const& _location
 )
 {
 	m_location = _location;
@@ -1538,11 +1812,25 @@ void Node::SetLocation
 //-----------------------------------------------------------------------------
 void Node::ApplicationCommandHandler
 (
-	uint8 const* _data
+		uint8 const* _data,
+		bool encrypted
+
 )
 {
 	if( CommandClass* pCommandClass = GetCommandClass( _data[5] ) )
 	{
+		if (pCommandClass->IsSecured() && !encrypted) {
+			Log::Write( LogLevel_Warning, m_nodeId, "Recieved a Clear Text Message for the CommandClass %s which is Secured", pCommandClass->GetCommandClassName().c_str());
+			bool drop = true;
+			Options::Get()->GetOptionAsBool("EnforceSecureReception", &drop);
+			if (drop) {
+				Log::Write( LogLevel_Warning, m_nodeId, "   Dropping Message");
+				return;
+			} else {
+				Log::Write( LogLevel_Warning, m_nodeId, "   Allowing Message (EnforceSecureReception is not set)");
+			}
+		}
+
 		pCommandClass->ReceivedCntIncr();
 		pCommandClass->HandleMsg( &_data[6], _data[4] );
 	}
@@ -1570,7 +1858,7 @@ void Node::ApplicationCommandHandler
 //-----------------------------------------------------------------------------
 CommandClass* Node::GetCommandClass
 (
-	uint8 const _commandClassId
+		uint8 const _commandClassId
 )const
 {
 	map<uint8,CommandClass*>::const_iterator it = m_commandClassMap.find( _commandClassId );
@@ -1589,7 +1877,7 @@ CommandClass* Node::GetCommandClass
 //-----------------------------------------------------------------------------
 CommandClass* Node::AddCommandClass
 (
-	uint8 const _commandClassId
+		uint8 const _commandClassId
 )
 {
 	if( GetCommandClass( _commandClassId ) )
@@ -1618,7 +1906,7 @@ CommandClass* Node::AddCommandClass
 //-----------------------------------------------------------------------------
 void Node::RemoveCommandClass
 (
-	uint8 const _commandClassId
+		uint8 const _commandClassId
 )
 {
 	map<uint8,CommandClass*>::iterator it = m_commandClassMap.find( _commandClassId );
@@ -1647,9 +1935,9 @@ void Node::RemoveCommandClass
 //-----------------------------------------------------------------------------
 bool Node::SetConfigParam
 (
-	uint8 const _param,
-	int32 _value,
-	uint8 const _size
+		uint8 const _param,
+		int32 _value,
+		uint8 const _size
 )
 {
 	if( Configuration* cc = static_cast<Configuration*>( GetCommandClass( Configuration::StaticGetCommandClassId() ) ) )
@@ -1713,7 +2001,7 @@ bool Node::SetConfigParam
 //-----------------------------------------------------------------------------
 void Node::RequestConfigParam
 (
-	uint8 const _param
+		uint8 const _param
 )
 {
 	if( Configuration* cc = static_cast<Configuration*>( GetCommandClass( Configuration::StaticGetCommandClassId() ) ) )
@@ -1728,7 +2016,7 @@ void Node::RequestConfigParam
 //-----------------------------------------------------------------------------
 bool Node::RequestAllConfigParams
 (
-	uint32 const _requestFlags
+		uint32 const _requestFlags
 )
 {
 	bool res = false;
@@ -1778,7 +2066,7 @@ bool Node::RequestDynamicValues
 //-----------------------------------------------------------------------------
 void Node::SetLevel
 (
-	uint8 const _level
+		uint8 const _level
 )
 {
 	// Level is 0-99, with 0 = off and 99 = fully on. 255 = turn on at last level.
@@ -1802,11 +2090,11 @@ void Node::SetNodeOn
 (
 )
 {
-    // Level is 0-99, with 0 = off and 99 = fully on. 255 = turn on at last level.
-    if( Basic* cc = static_cast<Basic*>( GetCommandClass( Basic::StaticGetCommandClassId() ) ) )
-    {
-        cc->Set( 255 );
-    }
+	// Level is 0-99, with 0 = off and 99 = fully on. 255 = turn on at last level.
+	if( Basic* cc = static_cast<Basic*>( GetCommandClass( Basic::StaticGetCommandClassId() ) ) )
+	{
+		cc->Set( 255 );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1817,11 +2105,11 @@ void Node::SetNodeOff
 (
 )
 {
-    // Level is 0-99, with 0 = off and 99 = fully on. 255 = turn on at last level.
-    if( Basic* cc = static_cast<Basic*>( GetCommandClass( Basic::StaticGetCommandClassId() ) ) )
-    {
-        cc->Set( 0 );
-    }
+	// Level is 0-99, with 0 = off and 99 = fully on. 255 = turn on at last level.
+	if( Basic* cc = static_cast<Basic*>( GetCommandClass( Basic::StaticGetCommandClassId() ) ) )
+	{
+		cc->Set( 0 );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1830,11 +2118,11 @@ void Node::SetNodeOff
 //-----------------------------------------------------------------------------
 ValueID Node::CreateValueID
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	ValueID::ValueType const _type
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		ValueID::ValueType const _type
 )
 {
 	return ValueID( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _type );
@@ -1846,19 +2134,19 @@ ValueID Node::CreateValueID
 //-----------------------------------------------------------------------------
 bool Node::CreateValueBool
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	bool const _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		bool const _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueBool* value = new ValueBool( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueBool* value = new ValueBool( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -1876,12 +2164,12 @@ bool Node::CreateValueBool
 //-----------------------------------------------------------------------------
 bool Node::CreateValueButton
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		uint8 const _pollIntensity
 )
 {
 	ValueButton* value = new ValueButton( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _pollIntensity );
@@ -1902,19 +2190,19 @@ bool Node::CreateValueButton
 //-----------------------------------------------------------------------------
 bool Node::CreateValueByte
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	uint8 const _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		uint8 const _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueByte* value = new ValueByte( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueByte* value = new ValueByte( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -1932,19 +2220,19 @@ bool Node::CreateValueByte
 //-----------------------------------------------------------------------------
 bool Node::CreateValueDecimal
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	string const& _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		string const& _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueDecimal* value = new ValueDecimal( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueDecimal* value = new ValueDecimal( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -1962,19 +2250,19 @@ bool Node::CreateValueDecimal
 //-----------------------------------------------------------------------------
 bool Node::CreateValueInt
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	int32 const _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		int32 const _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueInt* value = new ValueInt( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueInt* value = new ValueInt( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -1992,18 +2280,18 @@ bool Node::CreateValueInt
 //-----------------------------------------------------------------------------
 bool Node::CreateValueList
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	uint8 const _size,
-	vector<ValueList::Item> const& _items,
-	int32 const _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		uint8 const _size,
+		vector<ValueList::Item> const& _items,
+		int32 const _default,
+		uint8 const _pollIntensity
 )
 {
 	ValueList* value = new ValueList( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _items, _default, _pollIntensity, _size );
@@ -2024,17 +2312,17 @@ bool Node::CreateValueList
 //-----------------------------------------------------------------------------
 bool Node::CreateValueRaw
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	uint8 const* _default,
-	uint8 const _length,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		uint8 const* _default,
+		uint8 const _length,
+		uint8 const _pollIntensity
 )
 {
 	ValueRaw* value = new ValueRaw( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _length, _pollIntensity );
@@ -2055,15 +2343,15 @@ bool Node::CreateValueRaw
 //-----------------------------------------------------------------------------
 bool Node::CreateValueSchedule
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		uint8 const _pollIntensity
 )
 {
 	ValueSchedule* value = new ValueSchedule( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _pollIntensity );
@@ -2084,19 +2372,19 @@ bool Node::CreateValueSchedule
 //-----------------------------------------------------------------------------
 bool Node::CreateValueShort
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	int16 const _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		int16 const _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueShort* value = new ValueShort( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueShort* value = new ValueShort( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -2114,19 +2402,19 @@ bool Node::CreateValueShort
 //-----------------------------------------------------------------------------
 bool Node::CreateValueString
 (
-	ValueID::ValueGenre const _genre,
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex,
-	string const& _label,
-	string const& _units,
-	bool const _readOnly,
-	bool const _writeOnly,
-	string const& _default,
-	uint8 const _pollIntensity
+		ValueID::ValueGenre const _genre,
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex,
+		string const& _label,
+		string const& _units,
+		bool const _readOnly,
+		bool const _writeOnly,
+		string const& _default,
+		uint8 const _pollIntensity
 )
 {
-  	ValueString* value = new ValueString( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
+	ValueString* value = new ValueString( m_homeId, m_nodeId, _genre, _commandClassId, _instance, _valueIndex, _label, _units, _readOnly, _writeOnly, _default, _pollIntensity );
 	ValueStore* store = GetValueStore();
 	if( store->AddValue( value ) )
 	{
@@ -2144,7 +2432,7 @@ bool Node::CreateValueString
 //-----------------------------------------------------------------------------
 void Node::RemoveValueList
 (
-	ValueList* _value
+		ValueList* _value
 )
 {
 	ValueStore* store = GetValueStore();
@@ -2157,8 +2445,8 @@ void Node::RemoveValueList
 //-----------------------------------------------------------------------------
 bool Node::CreateValueFromXML
 (
-	uint8 const _commandClassId,
-	TiXmlElement const* _valueElement
+		uint8 const _commandClassId,
+		TiXmlElement const* _valueElement
 )
 {
 	Value* value = NULL;
@@ -2204,8 +2492,8 @@ bool Node::CreateValueFromXML
 //-----------------------------------------------------------------------------
 void Node::ReadValueFromXML
 (
-	uint8 const _commandClassId,
-	TiXmlElement const* _valueElement
+		uint8 const _commandClassId,
+		TiXmlElement const* _valueElement
 )
 {
 	int32 intVal;
@@ -2250,7 +2538,7 @@ void Node::ReadValueFromXML
 //-----------------------------------------------------------------------------
 Value* Node::GetValue
 (
-	ValueID const& _id
+		ValueID const& _id
 )
 {
 	// This increments the value's reference count
@@ -2263,9 +2551,9 @@ Value* Node::GetValue
 //-----------------------------------------------------------------------------
 Value* Node::GetValue
 (
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex
 )
 {
 	Value* value = NULL;
@@ -2281,9 +2569,9 @@ Value* Node::GetValue
 //-----------------------------------------------------------------------------
 bool Node::RemoveValue
 (
-	uint8 const _commandClassId,
-	uint8 const _instance,
-	uint8 const _valueIndex
+		uint8 const _commandClassId,
+		uint8 const _instance,
+		uint8 const _valueIndex
 )
 {
 	ValueStore* store = GetValueStore();
@@ -2296,7 +2584,7 @@ bool Node::RemoveValue
 //-----------------------------------------------------------------------------
 Group* Node::GetGroup
 (
-	uint8 const _groupIdx
+		uint8 const _groupIdx
 )
 {
 	map<uint8,Group*>::iterator it = m_groups.find( _groupIdx );
@@ -2314,7 +2602,7 @@ Group* Node::GetGroup
 //-----------------------------------------------------------------------------
 void Node::AddGroup
 (
-	Group* _group
+		Group* _group
 )
 {
 	map<uint8,Group*>::iterator it = m_groups.find( _group->GetIdx() );
@@ -2334,7 +2622,7 @@ void Node::AddGroup
 //-----------------------------------------------------------------------------
 void Node::WriteGroups
 (
-	TiXmlElement* _associationsElement
+		TiXmlElement* _associationsElement
 )
 {
 	for( map<uint8,Group*>::iterator it = m_groups.begin(); it != m_groups.end(); ++it )
@@ -2364,8 +2652,27 @@ uint8 Node::GetNumGroups
 //-----------------------------------------------------------------------------
 uint32 Node::GetAssociations
 (
-	uint8 const _groupIdx,
-	uint8** o_associations
+		uint8 const _groupIdx,
+		uint8** o_associations
+)
+{
+	uint32 numAssociations = 0;
+	if( Group* group = GetGroup( _groupIdx ) )
+	{
+		numAssociations = group->GetAssociations( o_associations );
+	}
+
+	return numAssociations;
+}
+
+//-----------------------------------------------------------------------------
+// <Node::GetAssociations>
+// Gets the associations for a group
+//-----------------------------------------------------------------------------
+uint32 Node::GetAssociations
+(
+		uint8 const _groupIdx,
+		InstanceAssociation** o_associations
 )
 {
 	uint32 numAssociations = 0;
@@ -2383,7 +2690,7 @@ uint32 Node::GetAssociations
 //-----------------------------------------------------------------------------
 uint8 Node::GetMaxAssociations
 (
-	uint8 const _groupIdx
+		uint8 const _groupIdx
 )
 {
 	uint8 maxAssociations = 0;
@@ -2401,7 +2708,7 @@ uint8 Node::GetMaxAssociations
 //-----------------------------------------------------------------------------
 string Node::GetGroupLabel
 (
-	uint8 const _groupIdx
+		uint8 const _groupIdx
 )
 {
 	string label = "";
@@ -2419,13 +2726,14 @@ string Node::GetGroupLabel
 //-----------------------------------------------------------------------------
 void Node::AddAssociation
 (
-	uint8 const _groupIdx,
-	uint8 const _targetNodeId
+		uint8 const _groupIdx,
+		uint8 const _targetNodeId,
+		uint8 const _instance
 )
 {
 	if( Group* group = GetGroup( _groupIdx ) )
 	{
-		group->AddAssociation( _targetNodeId );
+		group->AddAssociation( _targetNodeId, _instance  );
 	}
 }
 
@@ -2435,13 +2743,14 @@ void Node::AddAssociation
 //-----------------------------------------------------------------------------
 void Node::RemoveAssociation
 (
-	uint8 const _groupIdx,
-	uint8 const _targetNodeId
+		uint8 const _groupIdx,
+		uint8 const _targetNodeId,
+		uint8 const _instance
 )
 {
 	if( Group* group = GetGroup( _groupIdx ) )
 	{
-		group->RemoveAssociation( _targetNodeId );
+		group->RemoveAssociation( _targetNodeId, _instance );
 	}
 }
 
@@ -2458,7 +2767,7 @@ void Node::AutoAssociate
 	if( autoAssociate )
 	{
 		// Try to automatically associate with any groups that have been flagged.
-		uint8 controllerNodeId = GetDriver()->GetNodeId();
+		uint8 controllerNodeId = GetDriver()->GetControllerNodeId();
 
 		for( map<uint8,Group*>::iterator it = m_groups.begin(); it != m_groups.end(); ++it )
 		{
@@ -2494,8 +2803,8 @@ Driver* Node::GetDriver
 //-----------------------------------------------------------------------------
 string Node::GetEndPointDeviceClassLabel
 (
-	uint8 const _generic,
-	uint8 const _specific
+		uint8 const _generic,
+		uint8 const _specific
 )
 {
 	char str[32];
@@ -2533,9 +2842,9 @@ string Node::GetEndPointDeviceClassLabel
 //-----------------------------------------------------------------------------
 bool Node::SetDeviceClasses
 (
-	uint8 const _basic,
-	uint8 const _generic,
-	uint8 const _specific
+		uint8 const _basic,
+		uint8 const _generic,
+		uint8 const _specific
 )
 {
 	m_basic = _basic;
@@ -2660,12 +2969,163 @@ bool Node::SetDeviceClasses
 }
 
 //-----------------------------------------------------------------------------
+// <Node::SetPlusDeviceClasses>
+// Set the device class data for the node based on the Zwave+ info report
+//-----------------------------------------------------------------------------
+bool Node::SetPlusDeviceClasses
+(
+		uint8 const _role,
+		uint8 const _nodeType,
+		uint16 const _deviceType
+)
+{
+	if ( m_nodePlusInfoReceived )
+	{
+		return false; // already set
+	}
+
+	if( !s_deviceClassesLoaded )
+	{
+		ReadDeviceClasses();
+	}
+
+	m_nodePlusInfoReceived = true;
+	m_role = _role;
+	m_deviceType = _deviceType;
+	m_nodeType = _nodeType;
+
+	Log::Write (LogLevel_Info, m_nodeId, "ZWave+ Info Received from Node %d", m_nodeId);
+	map<uint8,DeviceClass*>::iterator nit = s_nodeTypes.find( m_nodeType );
+	if (nit != s_nodeTypes.end())
+	{
+		DeviceClass* deviceClass = nit->second;
+
+		Log::Write( LogLevel_Info, m_nodeId, "  Zwave+ Node Type  (0x%.2x) - %s. Mandatory Command Classes:", m_nodeType, deviceClass->GetLabel().c_str() );
+		uint8 const *_commandClasses = deviceClass->GetMandatoryCommandClasses();
+
+		/* no CommandClasses to add */
+		if (_commandClasses != NULL)
+		{
+			int i = 0;
+			while (uint8 ccid = _commandClasses[i++])
+			{
+				if( CommandClasses::IsSupported( ccid ) )
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    %s", CommandClasses::GetName(ccid).c_str());
+				}
+				else
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    0x%.2x (Not Supported)", ccid);
+				}
+			}
+
+
+			// Add the mandatory command classes for this Roletype
+			AddMandatoryCommandClasses( deviceClass->GetMandatoryCommandClasses() );
+		}
+		else
+		{
+			Log::Write( LogLevel_Info, m_nodeId, "    NONE");
+		}
+	}
+	else
+	{
+		Log::Write (LogLevel_Warning, m_nodeId, "  Zwave+ Node Type  (0x%.2x) - NOT FOUND. No Mandatory Command Classes Loaded:", m_nodeType);
+	}
+
+
+	// Apply any Zwave+ device class data
+	map<uint16,DeviceClass*>::iterator dit = s_deviceTypeClasses.find( _deviceType );
+	if( dit != s_deviceTypeClasses.end() )
+	{
+		DeviceClass* deviceClass = dit->second;
+		// m_type = deviceClass->GetLabel(); // do we what to update the type with the zwave+ info??
+
+		Log::Write( LogLevel_Info, m_nodeId, "  Zwave+ Device Type  (0x%.2x) - %s. Mandatory Command Classes:", _deviceType, deviceClass->GetLabel().c_str() );
+		uint8 const *_commandClasses = deviceClass->GetMandatoryCommandClasses();
+
+		/* no CommandClasses to add */
+		if (_commandClasses != NULL)
+		{
+			int i = 0;
+			while (uint8 ccid = _commandClasses[i++])
+			{
+				if( CommandClasses::IsSupported( ccid ) )
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    %s", CommandClasses::GetName(ccid).c_str());
+				}
+				else
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    0x%.2x (Not Supported)", ccid);
+				}
+			}
+
+
+			// Add the mandatory command classes for this device class type
+			AddMandatoryCommandClasses( deviceClass->GetMandatoryCommandClasses() );
+		}
+		else
+		{
+			Log::Write( LogLevel_Info, m_nodeId, "    NONE");
+		}
+	}
+	else
+	{
+		Log::Write (LogLevel_Warning, m_nodeId, "  Zwave+ Device Type  (0x%.2x) - NOT FOUND. No Mandatory Command Classes Loaded:", m_nodeType);
+	}
+
+	// Apply any Role device class data
+	map<uint8,DeviceClass*>::iterator rit = s_roleDeviceClasses.find( _role );
+	if( rit != s_roleDeviceClasses.end() )
+	{
+		DeviceClass* roleDeviceClass = rit->second;
+
+		Log::Write( LogLevel_Info, m_nodeId, "  ZWave+ Role Type  (0x%.2x) - %s", m_generic, roleDeviceClass->GetLabel().c_str() );
+
+		uint8 const *_commandClasses = roleDeviceClass->GetMandatoryCommandClasses();
+
+		/* no CommandClasses to add */
+		if (_commandClasses != NULL)
+		{
+			int i = 0;
+			while (uint8 ccid = _commandClasses[i++])
+			{
+				if( CommandClasses::IsSupported( ccid ) )
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    %s", CommandClasses::GetName(ccid).c_str());
+				}
+				else
+				{
+					Log::Write( LogLevel_Info, m_nodeId, "    0x%.2x (Not Supported)", ccid);
+				}
+			}
+
+
+			// Add the mandatory command classes for this role class type
+			AddMandatoryCommandClasses( roleDeviceClass->GetMandatoryCommandClasses() );
+		}
+		else
+		{
+			Log::Write( LogLevel_Info, m_nodeId, "    NONE");
+		}
+
+	}
+	else
+	{
+		Log::Write (LogLevel_Warning, m_nodeId, "  ZWave+ Role Type  (0x%.2x) - NOT FOUND. No Mandatory Command Classes Loaded:", m_nodeType);
+	}
+
+
+	return true;
+}
+
+//-----------------------------------------------------------------------------
 // <Node::AddMandatoryCommandClasses>
 // Add mandatory command classes to the node
 //-----------------------------------------------------------------------------
 bool Node::AddMandatoryCommandClasses
 (
-	uint8 const* _commandClasses
+		uint8 const* _commandClasses
 )
 {
 	if( NULL == _commandClasses )
@@ -2688,7 +3148,12 @@ bool Node::AddMandatoryCommandClasses
 		}
 
 		if( CommandClasses::IsSupported( cc ) )
-        {
+		{
+			if (Security::StaticGetCommandClassId() == cc && !GetDriver()->isNetworkKeySet()) {
+				Log::Write(LogLevel_Warning, m_nodeId, "Security Command Class Cannot be Enabled - NetworkKey is not set");
+				continue;
+			}
+
 			if( CommandClass* commandClass = AddCommandClass( cc ) )
 			{
 				// If this class came after the COMMAND_CLASS_MARK, then we do not create values.
@@ -2742,7 +3207,7 @@ void Node::ReadDeviceClasses
 			if( keyStr )
 			{
 				char* pStop;
-				uint8 key = (uint8)strtol( keyStr, &pStop, 16 );
+				uint16 key = (uint16)strtol( keyStr, &pStop, 16 );
 
 				if( !strcmp( str, "Generic" ) )
 				{
@@ -2755,6 +3220,18 @@ void Node::ReadDeviceClasses
 					{
 						s_basicDeviceClasses[key] = label;
 					}
+				}
+				else if( !strcmp( str, "Role" ) )
+				{
+					s_roleDeviceClasses[key] = new DeviceClass( child );
+				}
+				else if( !strcmp( str, "DeviceType" ) )
+				{
+					s_deviceTypeClasses[key] = new DeviceClass( child );
+				}
+				else if (!strcmp( str, "NodeType" ) )
+				{
+					s_nodeTypes[key] = new DeviceClass( child );
 				}
 			}
 		}
@@ -2771,7 +3248,7 @@ void Node::ReadDeviceClasses
 //-----------------------------------------------------------------------------
 void Node::GetNodeStatistics
 (
-	NodeData* _data
+		NodeData* _data
 )
 {
 	_data->m_sentCnt = m_sentCnt;
@@ -2804,10 +3281,10 @@ void Node::GetNodeStatistics
 //-----------------------------------------------------------------------------
 Node::DeviceClass::DeviceClass
 (
-	TiXmlElement const* _el
+		TiXmlElement const* _el
 ):
-	m_mandatoryCommandClasses(NULL),
-	m_basicMapping(0)
+m_mandatoryCommandClasses(NULL),
+m_basicMapping(0)
 {
 	char const* str = _el->Attribute( "label" );
 	if( str )
@@ -2856,9 +3333,9 @@ Node::DeviceClass::DeviceClass
 //-----------------------------------------------------------------------------
 Node::GenericDeviceClass::GenericDeviceClass
 (
-	TiXmlElement const* _el
+		TiXmlElement const* _el
 ):
-	DeviceClass( _el )
+DeviceClass( _el )
 {
 	// Add any specific device classes
 	TiXmlElement const* child = _el->FirstChildElement();
@@ -2903,7 +3380,7 @@ Node::GenericDeviceClass::~GenericDeviceClass
 //-----------------------------------------------------------------------------
 Node::DeviceClass* Node::GenericDeviceClass::GetSpecificDeviceClass
 (
-	uint8 const& _specific
+		uint8 const& _specific
 )
 {
 	map<uint8,DeviceClass*>::iterator it = m_specificDeviceClasses.find( _specific );
@@ -2913,4 +3390,107 @@ Node::DeviceClass* Node::GenericDeviceClass::GetSpecificDeviceClass
 	}
 
 	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+// <Node::GenerateNonceKey>
+// Generate a NONCE key for this node
+//-----------------------------------------------------------------------------
+uint8 *Node::GenerateNonceKey() {
+	uint8 idx = this->m_lastnonce;
+	for (int i = 0; i < 8; i++) {
+		this->m_nonces[idx][i] = (rand()%0xFF)+1;
+	}
+	this->m_lastnonce++;
+	if (this->m_lastnonce >= 8)
+		this->m_lastnonce = 0;
+	for (uint8 i = 0; i < 8; i++) {
+		PrintHex("NONCES", (const uint8_t*)this->m_nonces[i], 8);
+	}
+	return &this->m_nonces[idx][0];
+}
+//-----------------------------------------------------------------------------
+// <Node::GetNonceKey>
+// Get a NONCE key for this node that matches the nonceid.
+//-----------------------------------------------------------------------------
+
+uint8 *Node::GetNonceKey(uint32 nonceid) {
+	for (uint8 i = 0; i < 8; i++) {
+		/* make sure the nonceid matches the first byte of our stored Nonce */
+		if (nonceid == this->m_nonces[i][0]) {
+			return &this->m_nonces[i][0];
+		}
+	}
+	Log::Write(LogLevel_Warning, m_nodeId, "A Nonce with id %x does not exist", nonceid);
+	for (uint8 i = 0; i < 8; i++) {
+		PrintHex("NONCES", (const uint8_t*)this->m_nonces[i], 8);
+	}
+	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+// <Node::GetDeviceTypeString>
+// Get the ZWave+ DeviceType as a String
+//-----------------------------------------------------------------------------
+string Node::GetDeviceTypeString() {
+
+	if( !s_deviceClassesLoaded )
+	{
+		ReadDeviceClasses();
+	}
+	map<uint16,DeviceClass*>::iterator nit = s_deviceTypeClasses.find( m_deviceType );
+	if (nit != s_deviceTypeClasses.end())
+	{
+		DeviceClass* deviceClass = nit->second;
+		return deviceClass->GetLabel();
+	}
+	return "";
+}
+//-----------------------------------------------------------------------------
+// <Node::GetRoleTypeString>
+// Get the ZWave+ RoleType as a String
+//-----------------------------------------------------------------------------
+string Node::GetRoleTypeString() {
+	if( !s_deviceClassesLoaded )
+	{
+		ReadDeviceClasses();
+	}
+	map<uint8,DeviceClass*>::iterator nit = s_roleDeviceClasses.find( m_role );
+	if (nit != s_roleDeviceClasses.end())
+	{
+		DeviceClass* deviceClass = nit->second;
+		return deviceClass->GetLabel();
+	}
+	return "";
+}
+//-----------------------------------------------------------------------------
+// <Node::GetRoleTypeString>
+// Get the ZWave+ NodeType as a String
+//-----------------------------------------------------------------------------
+string Node::GetNodeTypeString() {
+	if( !s_deviceClassesLoaded )
+	{
+		ReadDeviceClasses();
+	}
+	map<uint8,DeviceClass*>::iterator nit = s_nodeTypes.find( m_nodeType );
+	if (nit != s_nodeTypes.end())
+	{
+		DeviceClass* deviceClass = nit->second;
+		return deviceClass->GetLabel();
+	}
+	return "";
+}
+
+//-----------------------------------------------------------------------------
+// <Node::GetRoleTypeString>
+// Get the ZWave+ NodeType as a String
+//-----------------------------------------------------------------------------
+bool Node::IsNodeReset()
+{
+	DeviceResetLocally *drl = static_cast<DeviceResetLocally *>(GetCommandClass(DeviceResetLocally::StaticGetCommandClassId()));
+	if (drl)
+		return drl->IsDeviceReset();
+	else return false;
+
+
 }

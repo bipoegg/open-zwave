@@ -191,7 +191,8 @@ bool Configuration::SetValue
 		case ValueID::ValueType_List:
 		{
 			ValueList const& valueList = static_cast<ValueList const&>( _value );
-			Set( param, valueList.GetItem().m_value, valueList.GetSize() );
+			if (valueList.GetItem() != NULL)
+				Set( param, valueList.GetItem()->m_value, valueList.GetSize() );
 			return true;
 		}
 		case ValueID::ValueType_Button:
@@ -255,7 +256,7 @@ void Configuration::Set
 {
 	Log::Write( LogLevel_Info, GetNodeId(), "Configuration::Set - Parameter=%d, Value=%d Size=%d", _parameter, _value, _size );
 
-	Msg* msg = new Msg( "ConfigurationCmd_Set", GetNodeId(), REQUEST, FUNC_ID_ZW_SEND_DATA, true );
+	Msg* msg = new Msg( "ConfigurationCmd_Set", GetNodeId(), REQUEST, FUNC_ID_ZW_SEND_DATA, true);
 	msg->Append( GetNodeId() );
 	msg->Append( 4 + _size );
 	msg->Append( GetCommandClassId() );

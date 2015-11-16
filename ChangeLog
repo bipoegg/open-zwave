@@ -120,12 +120,110 @@ Version 1.3
  - Pull Request #504 - CRC16Encap CC Support from xs4 (Justin)
  - Pull Request #522 - Dragon Tech In wall dimmer from Stevejbauer (Justin)
  - Fix Issue #523 - Add Wenzhou Door/Window Sensor from whiteduck22 (Justin)
+ - Pull Request #534 - Add Aeon Labs Recessed Door Sensor Gen5 from xxv (Justin)
+ - Pull Request #532 - Fix Aeon Labs DoorWindow Sensor Config from Nechry (Justin)
+ - Pull Request #529 - Updated Config for the Zipato MiniKeyPad from Nechry (Justin)
+ - Pull Request #528 and #527 - Add Aeon Labs Key Fob Gen5 Config from Nechry (Justin)
+ - Add new ID's for BeNext Energy Switch from Rob (Justin)
+ - Depreciate the ControllerCommand method in the Manager class and replace with direct 
+   function calls (Justin)
  - Pull Request #538 and #541 - Add SwiidInter to manufacturer_specific from Nechry (Justin)
  - Pull Request #545 - Add Philio PST02-A 4 in 1 MultiSensor from Nechry (Justin)
+ - Pull Request #565 - Add MultiInstanceAssociation CommandClass from xs4 (Justin)
+ - Pull Request #546 - Update Philio PST02-A Config from Nechry (Justin)
+ - Pull Request #547 & #549 - New Config File for Philio PST02-B from Nechry (Justin)
+ - Pull Request #548 - Update Config file for Philio PST02-C from Nechry (Justin)
+ - Pull Request #550 - Config File for Vision zd2102 from Ugoviti (Justin)
  - Fix a crash when dumping the Queue to the Log, reported by Gizmocuz (Justin)
+ - Pull Request #555 - Update the dotNet wrapper and OZWForm to use the new
+   Manager Methods that replace the BeginControllerCommand Method. From
+   JKlessens (Justin) 
  - Pull Request #564 - Add Cooper Configs from Stevejbauer (Justin)
  - Pull Request #561 - Add Version String Method from Ikkemaniac (Justin)
  - Pull Request #562 - Fix Windows Build Event with wrong directory from douglasbeck (Justin)
+ - Pull Request #567 and Issue 566 - Add Fibaro FGS221 from Nechry and
+   DanielLast (Justin)
+ - Pull Request #574 - Add Fibaro FGS212 Config from Nechry (Justin)
+ - Pull Request #576 - Fix up Qubino ZMNHBA2 Help from DavZero (Justin)
+ - Pull Request #578 - Add NodOn SmartPlug, Swiid SwiidPlug and update
+   ZME_064435 Config fron Nechry (Justin)
+ - Pull Request #580 - Add zwave.me Razberry ZWave+ adapter from Nechry
+   (Justin)
+ - Pull Request #581 - Update Zipato Minikeypad from Nechry (Justin)
+ - Fixed issue #352 - Security Rewrite (Justin)
+ - Fixed issue #467 - Fixed Aeon Labs Multisensor Gen5 (Justin)
+ - Fixed issue #471 - Fixed Vision ZD2102 (Justin)
+ - Fixed issue #472 - Fixed Aeon Labs Siren Gen5 (Justin)
+ - Fixed issue #473 - Fixed Philio PST02-1C Slim Multisensor (Justin)
+ - Fixed issue #540 - Depreciate the BeginControllerCommand Method for
+   dedicated methods in the Manager Class - Applications should update their
+   code to use the new API instead. (Justin)
+ - Pull Request #587 - Add Zwave.me ZME_WALLC-S Secure Wall Controller from
+   xs4 (Justin)
+ - Fixed issue #586 - Compile Error on newer GCC's (Justin)
+ - Fixed issue #568 - Compile Error on new OSX (Justin)
+ - Update the device_classes.xml with the latest known mappings (Justin)
+ - Enable NWI when adding nodes if HighPower is also enabled (Justin)
+ - Pull Request #596 - Aeotec Z-Stick Gen5 and GE 12722 on/Off Relay from
+   SpudGunMan (Justin)
+ - Pull Request #595 - Aeotec Smart Switch Gen5 Config Updates from Gert
+   Boer and Nechry (Justin)
+ - Pull Request #594 - Aeotec Minimote Config Updates from Nechry (Justin)
+ - Update Aeon Labs to Aeotec as thats their Retail name (Justin)
+ - Pull Request #598 - Update Config Files for Fibaro FGS212 and FGS222 from
+   Nechry (Justin)
+ - If we recieve a cleartext message for a Secured CommandClass, drop the
+   message (Configurable - Set EnforceSecureReception to false in
+   options.xml) (Justin)
+ - Add Aeotec LED Bulb, MultiSensor 6 and SmartSwitch 6 Configs (Justin)
+ - Add Aeotec DSC24 identification and Everspring AD147 identification + config
+ - Add Schlage BE469NXCEN TouchScreen DeadBolt from Rushidesai (Justin)
+ - Pull Request #622 - Aeotec Micro Smart Energy Switch from Ugoviti (Justin)
+ - Issue #628 - Update Everspring SP814 Config file from iarmstrong (Justin)
+ - Issue #621 - Add Apache License for the cpp/build/sh2ju.sh script from Alteholz (Justin)
+ - Issue #585 - Possible fix for Node 0/255 when adding new nodes. (Justin)
+ - Issue #626 & #381 - Fix Segfault when trying to get a Empty/unpopulated
+   ValueList (when we get a ValueAdded Notificiation)
+ - Issue #637 - Change Color Channels ValueID from Config to System Genre (Justin)
+ - Issue #635 and #636 - Add widom energy driven switch from RobyBob64 (Justin)
+ - Issue #632 - Add Horstmann SES 301 Temp Sensor from ado464 (Justin)
+ - Pull Request #639 - Update ZME_06433 with bugfixes and new options from
+   cyr123 (Justin)
+ - Pull Request #640 - Add FGD212 Dimmer 2 Config from xs4 (Justin)
+ - Pull Request #641 - Update ZMNHBA2 Config from xs4 (Justin)
+ - Add Aeotec Smart Dimmer 6 Config (Justin)
+ - Pull Request #649 - Add Everspring st812-Flood Detector from Warp95 (Justin)
+ - Pull Request #648 -  Added configuration file for Merten 50x5xx Roller Shutter Module from Sascha (Justin)
+ - Pull Request #641 - A Large set of Config File updates from the Jeedom team (Justin)
+ - Issue #656 - Update ZME064435 and ZME05470 with Scene Activation Command
+   Class from CompaTech (Justin)
+ - Pull Request #655 - Update BeNext Devices from ewgast (Justin)
+ - Issue #658 - Reset a Message SendAttempts value when moving to the
+   Wakeup Queue, otherwise it gets dropped when we attempt to send it when
+   the device wakes up as it exceeds the retry count. (Justin)
+ - Issue #416 and Pull Request #506 - ValueShort and ValueSchedule were
+   using wrong Value Storage enums. Enhance Value::VerifyRefreshedValue to
+   handle almsot all types (Except Schedule) (Justin)
+ - Issue #501 - Fix ThermostatFanMode when checking for Valid Modes (Justin)
+ - Pull Request #659 - Added configuration file for D-Link Corp and DCH-Z110 Door/Window 3in1 sensor
+   from psixilambda (Justin)
+ - Issue #446 - Fix Visual Studio 2015 breakage. (Justin)
+ - Pull Request #664 - Add ZMHAD1 Qubino support from Wackoracoon (Justin)
+ - Pull Request #665 - Add ZMNHBD2 Flush 2 Relay from emdioh (Justin)
+ - Pull Request #668 - Add some new variables to pkg-config from Ekarak (Justin)
+ - Add a ozw_config file as a replacement for pkg-config and update pkgconfig install dirs (Justin)
+ - Pull Request #670 - Typo: Changes "Temerature" to "Temperature" from cslarsen (Justin)
+ - Added Aeotec DoorBell and Dry Contact Sensor (Justin)
+ - Issue #672 - Infinate Loop when refreshing ZWPlus Command Class (Justin)
+ - Issue #674 - Fix crash on Central Scene Message (Justin)
+ - Issue #671 - Updated Zwave.me ZME_WALLC-S Config file from rgroothuis (Justin)
+ - Pull Request #676 - Fix Windows Build Version and a few enhancements to
+   the dotNet wrapper from bufferUnderrun (Justin)
+ - OOhhhh. Pretty Colors (Justin)
+ - Pull Request #677 - Update for Linear Dimmers PD300Z-2 and WD500Z-1 from vexofp (Justin)
+ - Added Aeotec DoorBell and Dry Contact Sensors config files (Justin) 
+ - Issue #679 - Add Thermofloor TF 016 Terhmostat from Cog (Justin)
+ - Pull Request #686 - Add Australian Z-Stick Gen5 from phil-nelson (Justin)
 
 Version 1.2 
  - Released on 15/10/14

@@ -64,6 +64,7 @@ Manager* Manager::s_instance = NULL;
 extern uint16_t ozw_vers_major;
 extern uint16_t ozw_vers_minor;
 extern uint16_t ozw_vers_revision;
+extern char ozw_version_string[];
 
 //-----------------------------------------------------------------------------
 //	Construction
@@ -114,6 +115,15 @@ std::string Manager::getVersionAsString() {
 	std::ostringstream versionstream;
 	versionstream << ozw_vers_major << "." << ozw_vers_minor << "." << ozw_vers_revision;
 	return versionstream.str();
+}
+//-----------------------------------------------------------------------------
+//      <Manager::getVersionLong>
+//      Static method to get the long Version of OZW as a string.
+//-----------------------------------------------------------------------------
+std::string Manager::getVersionLongAsString() {
+        std::ostringstream versionstream;
+        versionstream << ozw_version_string;
+        return versionstream.str();
 }
 //-----------------------------------------------------------------------------
 //	<Manager::getVersion>
@@ -399,7 +409,7 @@ void Manager::SetDriverReady
 
 		// Notify the watchers
 		Notification* notification = new Notification(success ? Notification::Type_DriverReady : Notification::Type_DriverFailed );
-		notification->SetHomeAndNodeIds( _driver->GetHomeId(), _driver->GetNodeId() );
+		notification->SetHomeAndNodeIds( _driver->GetHomeId(), _driver->GetControllerNodeId() );
 		_driver->QueueNotification( notification );
 	}
 }
@@ -415,7 +425,7 @@ uint8 Manager::GetControllerNodeId
 {
 	if( Driver* driver = GetDriver( _homeId ) )
 	{
-		return driver->GetNodeId();
+		return driver->GetControllerNodeId();
 	}
 
 	Log::Write( LogLevel_Info, "mgr,     GetControllerNodeId() failed - _homeId %d not found", _homeId );
@@ -971,6 +981,28 @@ uint8 Manager::GetNodeSecurity
 	return version;
 }
 
+
+//-----------------------------------------------------------------------------
+// <Manager::IsNodeZWavePlus>
+// Get if the Node is a ZWave Plus Supported Node
+//-----------------------------------------------------------------------------
+bool Manager::IsNodeZWavePlus
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	uint8 version = 0;
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		version = driver->IsNodeZWavePlus( _nodeId );
+	}
+
+	return version;
+}
+
+
+
 //-----------------------------------------------------------------------------
 // <Manager::GetNodeBasic>
 // Get the basic type of a node
@@ -1040,7 +1072,10 @@ string Manager::GetNodeType
 {
 	if( Driver* driver = GetDriver( _homeId ) )
 	{
-		return driver->GetNodeType( _nodeId );
+		if (driver->IsNodeZWavePlus(_nodeId))
+			return driver->GetNodeDeviceTypeString(_nodeId);
+		else
+			return driver->GetNodeType( _nodeId );
 	}
 
 	return "Unknown";
@@ -1240,6 +1275,112 @@ string Manager::GetNodeProductType
 	}
 
 	return "Unknown";
+}
+
+
+//-----------------------------------------------------------------------------
+// <Manager::GetNodeDeviceType>
+// Get the node device type as reported in the Z-Wave+ Info report.
+//-----------------------------------------------------------------------------
+uint8 Manager::GetNodeDeviceType
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodeDeviceType( _nodeId );
+	}
+
+	return 0x00; // unknown
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::GetNodeDeviceType>
+// Get the node device type as reported in the Z-Wave+ Info report.
+//-----------------------------------------------------------------------------
+string Manager::GetNodeDeviceTypeString
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodeDeviceTypeString( _nodeId );
+	}
+
+	return ""; // unknown
+}
+
+
+
+//-----------------------------------------------------------------------------
+// <Manager::GetNodeRole>
+// Get the node role as reported in the Z-Wave+ Info report.
+//-----------------------------------------------------------------------------
+uint8 Manager::GetNodeRole
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodeRole( _nodeId );
+	}
+
+	return 0x00; // unknown
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::GetNodeRole>
+// Get the node role as reported in the Z-Wave+ Info report.
+//-----------------------------------------------------------------------------
+string Manager::GetNodeRoleString
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodeRoleString( _nodeId );
+	}
+
+	return ""; // unknown
+}
+
+
+uint8 Manager::GetNodePlusType
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodePlusType( _nodeId );
+	}
+
+	return 0x00; // unknown
+
+}
+
+string Manager::GetNodePlusTypeString
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetNodePlusTypeString( _nodeId );
+	}
+
+	return ""; // unknown
+
 }
 
 //-----------------------------------------------------------------------------
@@ -2065,10 +2206,16 @@ bool Manager::GetValueAsString
 				{
 					if( ValueList* value = static_cast<ValueList*>( driver->GetValue( _id ) ) )
 					{
-						ValueList::Item const& item = value->GetItem();
-						*o_value = item.m_label;
+						ValueList::Item const *item = value->GetItem();
+						if (item == NULL) {
+							o_value = NULL;
+							res = false;
+						} else {
+							*o_value = item->m_label;
+							res = true;
+						}
 						value->Release();
-						res = true;
+
 					} else {
 						OZW_ERROR(OZWException::OZWEXCEPTION_INVALID_VALUEID, "Invalid ValueID passed to GetValueAsString");
 					}
@@ -2173,11 +2320,14 @@ bool Manager::GetValueListSelection
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueList* value = static_cast<ValueList*>( driver->GetValue( _id ) ) )
 				{
-					ValueList::Item const& item = value->GetItem();
-					if( &item != NULL )
+					ValueList::Item const *item = value->GetItem();
+					if( item != NULL && item->m_label.length() > 0)
 					{
-						*o_value = item.m_label;
+						*o_value = item->m_label;
 						res = true;
+					} else {
+						o_value = NULL;
+						Log::Write(LogLevel_Warning, "ValueList returned a NULL value for GetValueListSelection: %s", value->GetLabel().c_str());
 					}
 					value->Release();
 				} else {
@@ -2213,10 +2363,15 @@ bool Manager::GetValueListSelection
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueList* value = static_cast<ValueList*>( driver->GetValue( _id ) ) )
 				{
-					ValueList::Item const& item = value->GetItem();
-					*o_value = item.m_value;
+					ValueList::Item const *item = value->GetItem();
+					if (item == NULL) {
+						res = false;
+					} else {
+						*o_value = item->m_value;
+						res = true;
+					}
 					value->Release();
-					res = true;
+
 				} else {
 					OZW_ERROR(OZWException::OZWEXCEPTION_INVALID_VALUEID, "Invalid ValueID passed to GetValueListSelection");
 				}
@@ -2317,7 +2472,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueBool* value = static_cast<ValueBool*>( driver->GetValue( _id ) ) )
@@ -2352,7 +2507,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueByte* value = static_cast<ValueByte*>( driver->GetValue( _id ) ) )
@@ -2387,7 +2542,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueDecimal* value = static_cast<ValueDecimal*>( driver->GetValue( _id ) ) )
@@ -2442,7 +2597,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueInt* value = static_cast<ValueInt*>( driver->GetValue( _id ) ) )
@@ -2478,7 +2633,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueRaw* value = static_cast<ValueRaw*>( driver->GetValue( _id ) ) )
@@ -2513,7 +2668,7 @@ bool Manager::SetValue
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueShort* value = static_cast<ValueShort*>( driver->GetValue( _id ) ) )
@@ -2548,7 +2703,7 @@ bool Manager::SetValueListSelection
 	{
 		if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 		{
-			if( _id.GetNodeId() != driver->GetNodeId() )
+			if( _id.GetNodeId() != driver->GetControllerNodeId() )
 			{
 				LockGuard LG(driver->m_nodeMutex);
 				if( ValueList* value = static_cast<ValueList*>( driver->GetValue( _id ) ) )
@@ -2582,7 +2737,7 @@ bool Manager::SetValue
 
 	if( Driver* driver = GetDriver( _id.GetHomeId() ) )
 	{
-		if( _id.GetNodeId() != driver->GetNodeId() )
+		if( _id.GetNodeId() != driver->GetControllerNodeId() )
 		{
 			LockGuard LG(driver->m_nodeMutex);
 
@@ -3161,6 +3316,26 @@ uint32 Manager::GetAssociations
 }
 
 //-----------------------------------------------------------------------------
+// <Manager::GetAssociations>
+// Gets the associations for a group
+//-----------------------------------------------------------------------------
+uint32 Manager::GetAssociations
+(
+		uint32 const _homeId,
+		uint8 const _nodeId,
+		uint8 const _groupIdx,
+		InstanceAssociation** o_associations
+)
+{
+	if( Driver* driver = GetDriver( _homeId ) )
+	{
+		return driver->GetAssociations( _nodeId, _groupIdx, o_associations );
+	}
+
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
 // <Manager::GetMaxAssociations>
 // Gets the maximum number of associations for a group
 //-----------------------------------------------------------------------------
@@ -3207,12 +3382,13 @@ void Manager::AddAssociation
 		uint32 const _homeId,
 		uint8 const _nodeId,
 		uint8 const _groupIdx,
-		uint8 const _targetNodeId
+		uint8 const _targetNodeId,
+		uint8 const _instance
 )
 {
 	if( Driver* driver = GetDriver( _homeId ) )
 	{
-		driver->AddAssociation( _nodeId, _groupIdx, _targetNodeId );
+		driver->AddAssociation( _nodeId, _groupIdx, _targetNodeId, _instance );
 	}
 }
 
@@ -3225,12 +3401,13 @@ void Manager::RemoveAssociation
 		uint32 const _homeId,
 		uint8 const _nodeId,
 		uint8 const _groupIdx,
-		uint8 const _targetNodeId
+		uint8 const _targetNodeId,
+		uint8 const _instance
 )
 {
 	if( Driver* driver = GetDriver( _homeId ) )
 	{
-		driver->RemoveAssociation( _nodeId, _groupIdx, _targetNodeId );
+		driver->RemoveAssociation( _nodeId, _groupIdx, _targetNodeId, _instance );
 	}
 }
 
@@ -3480,6 +3657,311 @@ void Manager::HealNetwork
 		}
 	}
 }
+//-----------------------------------------------------------------------------
+// <Manager::AddNode>
+// Add a Device to the Network.
+//-----------------------------------------------------------------------------
+bool Manager::AddNode
+(
+		uint32 const _homeId, bool _doSecurity
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		/* we use the Args option to communicate if Security CC should be initialized */
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_AddDevice,
+				NULL, NULL, true, 0, (_doSecurity  == true ? 1 : 0));
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::RemoveNode>
+// Remove a Device from the Network.
+//-----------------------------------------------------------------------------
+bool Manager::RemoveNode
+(
+		uint32 const _homeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_RemoveDevice,
+				NULL, NULL, true, 0, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::RemoveFailedNode>
+// Remove a Specific Device from the network if its non-responsive.
+//-----------------------------------------------------------------------------
+bool Manager::RemoveFailedNode
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_RemoveFailedNode,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::HasNodeFailed>
+// Test if the Controller Believes the Node has Failed.
+//-----------------------------------------------------------------------------
+bool Manager::HasNodeFailed
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_HasNodeFailed,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::AssignReturnRoute>
+// Ask a Node to update its Return Route to the Controller
+//-----------------------------------------------------------------------------
+bool Manager::AssignReturnRoute
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_AssignReturnRoute,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::RequestNodeNeighborUpdate>
+// Ask a Node to update its Neighbor Table.
+//-----------------------------------------------------------------------------
+bool Manager::RequestNodeNeighborUpdate
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_RequestNodeNeighborUpdate,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+
+//-----------------------------------------------------------------------------
+// <Manager::DeleteAllReturnRoutes>
+// Ask a Node to delete all its Return Routes
+//-----------------------------------------------------------------------------
+bool Manager::DeleteAllReturnRoutes
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_DeleteAllReturnRoutes,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::SendNodeInformation>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::SendNodeInformation
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_SendNodeInformation,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::CreateNewPrimary>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::CreateNewPrimary
+(
+		uint32 const _homeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_CreateNewPrimary,
+				NULL, NULL, true, 0, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::ReceiveConfiguration>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::ReceiveConfiguration
+(
+		uint32 const _homeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_ReceiveConfiguration,
+				NULL, NULL, true, 0, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::ReplaceFailedNode>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::ReplaceFailedNode
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_ReplaceFailedNode,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::TransferPrimaryRole>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::TransferPrimaryRole
+(
+		uint32 const _homeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_TransferPrimaryRole,
+				NULL, NULL, true, 0, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::RequestNetworkUpdate>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::RequestNetworkUpdate
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_RequestNetworkUpdate,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::ReplicationSend>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::ReplicationSend
+(
+		uint32 const _homeId,
+		uint8 const _nodeId
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_ReplicationSend,
+				NULL, NULL, true, _nodeId, 0);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::CreateButton>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::CreateButton
+(
+		uint32 const _homeId,
+		uint8 const _nodeId,
+		uint8 const _buttonid
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_CreateButton,
+				NULL, NULL, true, _nodeId, _buttonid);
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// <Manager::DeleteButton>
+// Send a NIF frame from the Controller to the Node
+//-----------------------------------------------------------------------------
+bool Manager::DeleteButton
+(
+		uint32 const _homeId,
+		uint8 const _nodeId,
+		uint8 const _buttonid
+)
+{
+	if (Driver *driver = GetDriver( _homeId ) ) {
+		LockGuard LG(driver->m_nodeMutex);
+		return driver->BeginControllerCommand(
+				Driver::ControllerCommand_DeleteButton,
+				NULL, NULL, true, _nodeId, _buttonid);
+	}
+	return false;
+}
+
+
+
 
 //-----------------------------------------------------------------------------
 // <Manager::GetNumScenes>

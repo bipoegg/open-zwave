@@ -34,8 +34,9 @@ endif
 
 #if we are on a Mac, add these flags and libs to the compile and link phases 
 ifeq ($(UNAME),Darwin)
-CFLAGS	+= -c -DDARWIN -arch i386 -arch x86_64
-LDFLAGS += -arch i386 -arch x86_64 -dynamiclib
+CFLAGS	+= -c -DDARWIN
+ARCH	+= -arch i386 -arch x86_64
+LDFLAGS += -dynamiclib
 LIBS	+= -framework IOKit -framework CoreFoundation -arch i386 -arch x86_64
 else ifeq ($(UNAME),FreeBSD)
 
@@ -88,7 +89,7 @@ indep := $(notdir $(filter-out $(top_srcdir)/cpp/src/vers.cpp, $(wildcard $(top_
 aes := $(notdir $(wildcard $(top_srcdir)/cpp/src/aes/*.c))
 
 
-default: printversion $(LIBDIR)/libopenzwave.a $(LIBDIR)/$(SHARED_LIB_NAME)
+default: printversion $(LIBDIR)/libopenzwave.a $(LIBDIR)/$(SHARED_LIB_NAME) $(top_builddir)/ozw_config
 
 clean:
 	@rm -rf $(DEPDIR) $(OBJDIR) $(LIBDIR)/libopenzwave.so* $(LIBDIR)/libopenzwave*.dylib $(LIBDIR)/libopenzwave.a $(top_builddir)/libopenzwave.pc $(top_builddir)/docs/api $(top_builddir)/Doxyfile $(top_srcdir)/cpp/src/vers.cpp
@@ -103,7 +104,7 @@ printversion:
 -include $(patsubst %.cpp,$(DEPDIR)/%.d,$(vclasses))
 -include $(patsubst %.cpp,$(DEPDIR)/%.d,$(pform))
 -include $(patsubst %.cpp,$(DEPDIR)/%.d,$(indep))
--include $(patsubst %.c,$(DEPDIR)/%d,$(aes))
+-include $(patsubst %.c,$(DEPDIR)/%.d,$(aes))
 
 #create a vers.cpp file that contains our version and subversion revisions
 $(top_srcdir)/cpp/src/vers.cpp:
@@ -138,13 +139,9 @@ $(LIBDIR)/$(SHARED_LIB_NAME):	$(patsubst %.cpp,$(OBJDIR)/%.o,$(tinyxml)) \
 			$(patsubst %.cpp,$(OBJDIR)/%.o,$(indep)) \
 			$(OBJDIR)/vers.o
 	@echo "Linking Shared Library"
-	@$(LD) $(LDFLAGS) -o $@ $+ $(LIBS)
+	@$(LD) $(LDFLAGS) $(ARCH) -o $@ $+ $(LIBS)
 	@ln -sf $(SHARED_LIB_NAME) $(LIBDIR)/$(SHARED_LIB_UNVERSIONED)
 
-ifeq ($(PKGCONFIG),)
-$(top_builddir)/libopenzwave.pc: $(top_srcdir)/cpp/build/libopenzwave.pc.in
-	$(warning Not Installing Package Config File)
-else
 $(top_builddir)/libopenzwave.pc: $(top_srcdir)/cpp/build/libopenzwave.pc.in $(PKGCONFIG)
 	@echo "Making libopenzwave pkg-config file"
 	@$(SED) \
@@ -152,9 +149,18 @@ $(top_builddir)/libopenzwave.pc: $(top_srcdir)/cpp/build/libopenzwave.pc.in $(PK
 		-e 's|[@]exec_prefix@|$(PREFIX)/bin|g' \
 		-e 's|[@]libdir@|$(instlibdir)|g' \
 		-e 's|[@]includedir@|$(PREFIX)/include/openzwave/|g' \
+                -e 's|[@]sysconfdir@|$(PREFIX)/etc/openzwave/|g' \
+                -e 's|[@]gitversion@|$(GITVERSION)|g' \
+                -e 's|[@]docdir@|$(docdir)/|g' \
 		-e 's|[@]VERSION@|$(VERSION)|g' \
 		< "$<" > "$@"
-endif
+$(top_builddir)/ozw_config: $(top_srcdir)/cpp/build/ozw_config.in
+	@echo "Making ozw_config file"
+	@$(SED) \
+		-e 's|[@]pkgconfigfile@|$(pkgconfigdir)/libopenzwave.pc|g' \
+		< "$<" > "$@"
+	@chmod +x $(top_builddir)/ozw_config
+	
 ifeq ($(DOT),)
 HAVE_DOT = -e 's|[@]HAVE_DOT@|NO|g' 
 else
@@ -180,29 +186,37 @@ doc: $(top_builddir)/Doxyfile
 	@cd $(top_builddir); $(DOXYGEN)
 endif
 
-install: $(LIBDIR)/$(SHARED_LIB_NAME) doc $(top_builddir)/libopenzwave.pc 
-	install -d $(DESTDIR)/$(instlibdir)/
-	cp  $(LIBDIR)/$(SHARED_LIB_NAME) $(DESTDIR)/$(instlibdir)/$(SHARED_LIB_NAME)
-	ln -sf $(SHARED_LIB_NAME) $(DESTDIR)/$(instlibdir)/$(SHARED_LIB_UNVERSIONED)
-	install -d $(DESTDIR)/$(includedir)
-	install -m 0644 $(top_srcdir)/cpp/src/*.h $(DESTDIR)/$(includedir)
-	install -d $(DESTDIR)/$(includedir)/command_classes/
-	install -m 0644 $(top_srcdir)/cpp/src/command_classes/*.h $(DESTDIR)/$(includedir)/command_classes/
-	install -d $(DESTDIR)/$(includedir)/value_classes/
-	install -m 0644 $(top_srcdir)/cpp/src/value_classes/*.h $(DESTDIR)/$(includedir)/value_classes/
-	install -d $(DESTDIR)/$(includedir)/platform/
-	install -m 0644 $(top_srcdir)/cpp/src/platform/*.h $(DESTDIR)/$(includedir)/platform/	
-	install -d $(DESTDIR)/$(includedir)/platform/unix/
-	install -m 0644 $(top_srcdir)/cpp/src/platform/unix/*.h $(DESTDIR)/$(includedir)/platform/unix/
-	install -d $(DESTDIR)/$(includedir)/aes/
-	install -m 0644 $(top_srcdir)/cpp/src/aes/*.h $(DESTDIR)/$(includedir)/aes/
-	install -d $(DESTDIR)/$(sysconfdir)/
-	cp -r $(top_srcdir)/config/* $(DESTDIR)/$(sysconfdir)
-	install -d $(DESTDIR)/$(docdir)/
-	cp -r $(top_srcdir)/docs/* $(DESTDIR)/$(docdir)
-	if [ -d "$(top_builddir)/docs/html/" ]; then cp -r $(top_builddir)/docs/html/* $(DESTDIR)/$(docdir); fi
-	install -d $(DESTDIR)/$(instlibdir)/pkgconfig/
-	if [ -f "$(PKGCONFIG)" ]; then install -d $(DESTDIR)/$(instlibdir)/pkgconfig/; cp $(top_builddir)/libopenzwave.pc $(DESTDIR)/$(instlibdir)/pkgconfig/; fi
+install: $(LIBDIR)/$(SHARED_LIB_NAME) doc $(top_builddir)/libopenzwave.pc $(top_builddir)/ozw_config
+	@echo "Installing Shared Library"
+	@install -d $(DESTDIR)/$(instlibdir)/
+	@cp  $(LIBDIR)/$(SHARED_LIB_NAME) $(DESTDIR)/$(instlibdir)/$(SHARED_LIB_NAME)
+	@ln -sf $(SHARED_LIB_NAME) $(DESTDIR)/$(instlibdir)/$(SHARED_LIB_UNVERSIONED)
+	@echo "Installing Headers"
+	@install -d $(DESTDIR)/$(includedir)
+	@install -m 0644 $(top_srcdir)/cpp/src/*.h $(DESTDIR)/$(includedir)
+	@install -d $(DESTDIR)/$(includedir)/command_classes/
+	@install -m 0644 $(top_srcdir)/cpp/src/command_classes/*.h $(DESTDIR)/$(includedir)/command_classes/
+	@install -d $(DESTDIR)/$(includedir)/value_classes/
+	@install -m 0644 $(top_srcdir)/cpp/src/value_classes/*.h $(DESTDIR)/$(includedir)/value_classes/
+	@install -d $(DESTDIR)/$(includedir)/platform/
+	@install -m 0644 $(top_srcdir)/cpp/src/platform/*.h $(DESTDIR)/$(includedir)/platform/	
+	@install -d $(DESTDIR)/$(includedir)/platform/unix/
+	@install -m 0644 $(top_srcdir)/cpp/src/platform/unix/*.h $(DESTDIR)/$(includedir)/platform/unix/
+	@install -d $(DESTDIR)/$(includedir)/aes/
+	@install -m 0644 $(top_srcdir)/cpp/src/aes/*.h $(DESTDIR)/$(includedir)/aes/
+	@install -d $(DESTDIR)/$(sysconfdir)/
+	@echo "Installing Config Database"
+	@cp -r $(top_srcdir)/config/* $(DESTDIR)/$(sysconfdir)
+	@echo "Installing Documentation"
+	@install -d $(DESTDIR)/$(docdir)/
+	@cp -r $(top_srcdir)/docs/* $(DESTDIR)/$(docdir)
+	@if [ -d "$(top_builddir)/docs/html/" ]; then cp -r $(top_builddir)/docs/html/* $(DESTDIR)/$(docdir); fi
+	@echo "Installing Pkg-config Files"
+	@install -d $(DESTDIR)/$(pkgconfigdir) 
+	@cp $(top_builddir)/libopenzwave.pc $(DESTDIR)/$(pkgconfigdir)
+	@install -d $(DESTDIR)/$(PREFIX)/bin/
+	@cp $(top_builddir)/ozw_config $(DESTDIR)/$(PREFIX)/bin/ozw_config
+	@chmod 755 $(DESTDIR)/$(PREFIX)/bin/ozw_config
 
 	
 

@@ -9,8 +9,6 @@ BUILD	?= release
 PREFIX	?= /usr/local
 
 
-#The Location of the svnversion command for determining the repository version
-SVNVERSION := $(shell which svnversion)
 #the System we are building on
 UNAME  := $(shell uname -s)
 #the location of Doxygen to generate our api documentation
@@ -91,6 +89,13 @@ else
 instlibdir ?= $(PREFIX)$(instlibdir.default)
 endif
 
+#pkg-config doesn't exist, lets try to guess best place to put the pc file
+ifeq ($(PKGCONFIG),)
+pkgconfigdir ?= $(shell if [ -d "/usr/lib64/pkgconfig" ]; then echo "/usr/lib64/pkgconfig"; else echo "/usr/lib/pkgconfig"; fi)
+else
+pkgconfigdir ?= $(shell pkg-config --variable pc_path pkg-config | awk '{split($$0,a,":"); print a[1]}')
+endif
+
 sysconfdir ?= $(PREFIX)/etc/openzwave/
 includedir ?= $(PREFIX)/include/openzwave/
 docdir ?= $(PREFIX)/share/doc/openzwave-$(VERSION).$(VERSION_REV)
@@ -106,23 +111,25 @@ DEPDIR = $(top_builddir)/.dep
 
 $(OBJDIR)/%.o : %.cpp
 	@echo "Building $(notdir $@)"
-	@$(CXX) $(CFLAGS) $(INCLUDES) -o $@ $<
+	@$(CXX) -MM $(CFLAGS) $(INCLUDES) $< > $(DEPDIR)/$*.d
+	@mv -f $(DEPDIR)/$*.d $(DEPDIR)/$*.d.tmp
+	@$(SED) -e 's|.*:|$(OBJDIR)/$*.o: $(DEPDIR)/$*.d|' < $(DEPDIR)/$*.d.tmp > $(DEPDIR)/$*.d;
+	@$(SED) -e 's/.*://' -e 's/\\$$//' < $(DEPDIR)/$*.d.tmp | fmt -1 | \
+	  $(SED) -e 's/^ *//' -e 's/$$/:/' >> $(DEPDIR)/.$*.d;
+	@rm -f $(DEPDIR)/$*.d.tmp
+	@$(CXX) $(CFLAGS) $(ARCH) $(INCLUDES) -o $@ $<
+
 
 $(OBJDIR)/%.o : %.c
 	@echo "Building $(notdir $@)"	
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
+	@$(CC) -MM $(CFLAGS) $(INCLUDES) $< > $(DEPDIR)/$*.d
+	@mv -f $(DEPDIR)/$*.d $(DEPDIR)/$*.d.tmp
+	@$(SED) -e 's|.*:|$(OBJDIR)/$*.o: $(DEPDIR)/$*.d|' < $(DEPDIR)/$*.d.tmp > $(DEPDIR)/$*.d;
+	@$(SED) -e 's/.*://' -e 's/\\$$//' < $(DEPDIR)/$*.d.tmp | fmt -1 | \
+	  $(SED) -e 's/^ *//' -e 's/$$/:/' >> $(DEPDIR)/.$*.d;
+	@rm -f $(DEPDIR)/$*.d.tmp
+	@$(CC) $(CFLAGS) $(ARCH) $(INCLUDES) -o $@ $<
 
-$(DEPDIR)/%.d : %.cpp
-	@set -e; rm -f $@; \
-	$(CXX) -MM $(INCLUDES) $< > $@.$$$$; \
-	$(SED) 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
-	rm -f $@.$$$$
-
-$(DEPDIR)/%.d : %.c
-	@set -e; rm -f $@; \
-	$(CXX) -MM $(INCLUDES) $< > $@.$$$$; \
-	$(SED) 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
-	rm -f $@.$$$$
 
 dummy := $(shell test -d $(OBJDIR) || mkdir -p $(OBJDIR))
 dummy := $(shell test -d $(DEPDIR) || mkdir -p $(DEPDIR))
